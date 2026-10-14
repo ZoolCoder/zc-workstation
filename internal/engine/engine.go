@@ -6,20 +6,37 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"runtime"
 	"slices"
+	"strings"
 
 	"github.com/zoolcoder/zc-workstation/internal/config"
 	"github.com/zoolcoder/zc-workstation/internal/plan"
 	"github.com/zoolcoder/zc-workstation/internal/provider"
+	"github.com/zoolcoder/zc-workstation/internal/provider/dotfiles"
 	"github.com/zoolcoder/zc-workstation/internal/provider/localdir"
+	"github.com/zoolcoder/zc-workstation/internal/provider/packages"
+	"github.com/zoolcoder/zc-workstation/internal/provider/tools"
+	"github.com/zoolcoder/zc-workstation/internal/sh"
 )
+
+// GOOS is the system targets are matched against; tests change it.
+var GOOS = runtime.GOOS
 
 // Providers maps a config provider name to its implementation.
 type Providers map[string]provider.Provider
 
-// Default is every built-in provider.
-func Default() Providers {
-	return Providers{"localdir": localdir.New()}
+// Default is every built-in provider, driving this machine's programs.
+func Default() Providers { return With(sh.System()) }
+
+// With is every built-in provider, driving programs through r.
+func With(r sh.Runner) Providers {
+	return Providers{
+		"localdir": localdir.New(),
+		"packages": packages.New(r, GOOS),
+		"dotfiles": dotfiles.New(r),
+		"tools":    tools.New(r),
+	}
 }
 
 type Engine struct {
@@ -48,7 +65,7 @@ func Select(cfg config.Config, names []string) ([]config.Target, error) {
 	var out []config.Target
 	for _, t := range cfg.Targets {
 		if len(names) == 0 || slices.Contains(names, t.Name) {
-			t.Path = cfg.Root(t)
+			t = cfg.Resolve(t)
 			out = append(out, t)
 		}
 	}
@@ -63,10 +80,14 @@ func (e *Engine) provider(t config.Target) (provider.Provider, error) {
 	return p, nil
 }
 
-// Plan reads live state for every selected target.
+// Plan reads live state for every selected target that applies to this
+// system.
 func (e *Engine) Plan(ctx context.Context) (plan.Plan, error) {
 	var p plan.Plan
 	for _, t := range e.targets {
+		if !t.ForOS(GOOS) {
+			continue
+		}
 		prov, err := e.provider(t)
 		if err != nil {
 			return plan.Plan{}, err
@@ -101,12 +122,21 @@ func (e *Engine) Apply(ctx context.Context, p plan.Plan, w io.Writer) error {
 	return err
 }
 
-// TargetStatus is one target's live summary.
+// TargetStatus is one target's live summary. InPlace and Declared are set
+// when the provider can count; Skipped means the target is for other systems.
 type TargetStatus struct {
 	Target   string `json:"target"`
 	Provider string `json:"provider"`
 	Summary  string `json:"summary"`
+	InPlace  int    `json:"in_place"`
+	Declared int    `json:"declared"`
+	Skipped  bool   `json:"skipped,omitempty"`
 	Error    string `json:"error,omitempty"`
+}
+
+// InSync reports whether everything the target declares is in place.
+func (s TargetStatus) InSync() bool {
+	return !s.Skipped && s.Error == "" && s.InPlace == s.Declared
 }
 
 // Status summarises every selected target. A target that cannot be read is
@@ -115,9 +145,84 @@ func (e *Engine) Status(ctx context.Context) []TargetStatus {
 	out := make([]TargetStatus, 0, len(e.targets))
 	for _, t := range e.targets {
 		row := TargetStatus{Target: t.Name, Provider: t.Provider}
+		if !t.ForOS(GOOS) {
+			row.Skipped = true
+			row.Summary = "not for " + GOOS + ", only " + strings.Join(t.OS, ", ")
+			out = append(out, row)
+			continue
+		}
 		prov, err := e.provider(t)
 		if err == nil {
-			row.Summary, err = prov.Status(ctx, t)
+			if m, ok := prov.(provider.Measurer); ok {
+				var live provider.Live
+				live, err = m.Measure(ctx, t)
+				row.Summary, row.InPlace, row.Declared = live.Summary, live.InPlace, live.Declared
+			} else {
+				row.Summary, err = prov.Status(ctx, t)
+			}
+		}
+		if err != nil {
+			row.Error = err.Error()
+		}
+		out = append(out, row)
+	}
+	return out
+}
+
+// Programs lists, sorted and once each, the programs the selected targets for
+// this system need.
+func (e *Engine) Programs() []string {
+	var out []string
+	for _, t := range e.targets {
+		if !t.ForOS(GOOS) {
+			continue
+		}
+		if r, ok := e.providers[t.Provider].(provider.Requirer); ok {
+			out = append(out, r.Programs(t)...)
+		}
+	}
+	slices.Sort(out)
+	return slices.Compact(out)
+}
+
+// Item and its states are re-exported so the dashboard reads them through
+// the engine, never a provider package.
+type Item = provider.Item
+
+const (
+	InPlace = provider.InPlace
+	Missing = provider.Missing
+	Differs = provider.Differs
+	Manual  = provider.Manual
+)
+
+// TargetItems is one target's inventory: what it declares, item by item.
+type TargetItems struct {
+	Target   string          `json:"target"`
+	Provider string          `json:"provider"`
+	Items    []provider.Item `json:"items"`
+	Skipped  bool            `json:"skipped,omitempty"`
+	Error    string          `json:"error,omitempty"`
+}
+
+// Items lists every selected target's items. Like Status, a target that
+// cannot be read reports it in its row.
+func (e *Engine) Items(ctx context.Context) []TargetItems {
+	out := make([]TargetItems, 0, len(e.targets))
+	for _, t := range e.targets {
+		row := TargetItems{Target: t.Name, Provider: t.Provider, Items: []provider.Item{}}
+		if !t.ForOS(GOOS) {
+			row.Skipped = true
+			out = append(out, row)
+			continue
+		}
+		prov, err := e.provider(t)
+		if err == nil {
+			if l, ok := prov.(provider.Lister); ok {
+				row.Items, err = l.Items(ctx, t)
+			} else {
+				err = fmt.Errorf("provider %s cannot list its items", t.Provider)
+			}
 		}
 		if err != nil {
 			row.Error = err.Error()

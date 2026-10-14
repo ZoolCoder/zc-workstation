@@ -8,6 +8,7 @@ import (
 
 	"github.com/zoolcoder/zc-workstation/internal/config"
 	"github.com/zoolcoder/zc-workstation/internal/plan"
+	"github.com/zoolcoder/zc-workstation/internal/provider"
 )
 
 // stuck accepts every write and changes nothing, so verify must catch it.
@@ -68,6 +69,39 @@ func TestSelectAndMissingProvider(t *testing.T) {
 		t.Fatal("missing provider planned")
 	}
 	if st := e.Status(context.Background()); st[0].Error == "" {
+		t.Fatalf("status %+v", st)
+	}
+}
+
+func TestTargetsForOtherSystemsAreSkipped(t *testing.T) {
+	defer func(goos string) { GOOS = goos }(GOOS)
+	GOOS = "linux"
+	c := cfg(t.TempDir())
+	c.Targets[0].OS = []string{"windows"}
+	e, _ := New(c, Default(), nil)
+	p, err := e.Plan(context.Background())
+	if err != nil || len(p.Actions) != 1 || p.Actions[0].Target != "b" {
+		t.Fatalf("plan %+v %v", p, err)
+	}
+	st := e.Status(context.Background())
+	if len(st) != 2 || !st[0].Skipped || st[0].InSync() || !strings.Contains(st[0].Summary, "only windows") || st[1].Skipped {
+		t.Fatalf("status %+v", st)
+	}
+}
+
+// counted measures, so Status must fill the counts from Measure.
+type counted struct{ stuck }
+
+func (counted) Measure(context.Context, config.Target) (provider.Live, error) {
+	return provider.Live{InPlace: 2, Declared: 3, Summary: "2 of 3"}, nil
+}
+
+func TestStatusUsesMeasure(t *testing.T) {
+	c := cfg(t.TempDir())
+	c.Targets[0].Provider = "counted"
+	e, _ := New(c, Providers{"counted": counted{}}, []string{"a"})
+	st := e.Status(context.Background())
+	if st[0].InPlace != 2 || st[0].Declared != 3 || st[0].Summary != "2 of 3" || st[0].InSync() {
 		t.Fatalf("status %+v", st)
 	}
 }

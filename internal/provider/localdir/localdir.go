@@ -15,6 +15,7 @@ import (
 
 	"github.com/zoolcoder/zc-workstation/internal/config"
 	"github.com/zoolcoder/zc-workstation/internal/plan"
+	"github.com/zoolcoder/zc-workstation/internal/provider"
 )
 
 type Provider struct{}
@@ -51,19 +52,44 @@ func (Provider) Plan(_ context.Context, t config.Target) ([]plan.Action, error) 
 	return actions, nil
 }
 
-// Status counts the declared files that are in place.
-func (Provider) Status(_ context.Context, t config.Target) (string, error) {
+// Measure counts the declared files that are in place.
+func (Provider) Measure(_ context.Context, t config.Target) (provider.Live, error) {
 	live, err := read(t.Path)
 	if err != nil {
-		return "", err
+		return provider.Live{}, err
 	}
-	inPlace := 0
+	m := provider.Live{Declared: len(t.Files)}
 	for name, want := range t.Files {
 		if have, ok := live[name]; ok && string(have) == want {
-			inPlace++
+			m.InPlace++
 		}
 	}
-	return fmt.Sprintf("%d of %d declared files in place, %d files on disk", inPlace, len(t.Files), len(live)), nil
+	m.Summary = fmt.Sprintf("%d of %d declared files in place, %d files on disk", m.InPlace, m.Declared, len(live))
+	return m, nil
+}
+
+// Items lists each declared file and whether its content is in place.
+func (Provider) Items(_ context.Context, t config.Target) ([]provider.Item, error) {
+	live, err := read(t.Path)
+	if err != nil {
+		return nil, err
+	}
+	items := make([]provider.Item, 0, len(t.Files))
+	for _, name := range sortedKeys(t.Files) {
+		item := provider.Item{Name: name, Kind: "file", State: provider.InPlace}
+		if have, ok := live[name]; !ok {
+			item.State = provider.Missing
+		} else if string(have) != t.Files[name] {
+			item.State = provider.Differs
+		}
+		items = append(items, item)
+	}
+	return items, nil
+}
+
+func (p Provider) Status(ctx context.Context, t config.Target) (string, error) {
+	m, err := p.Measure(ctx, t)
+	return m.Summary, err
 }
 
 // read returns every regular file under dir, by slash path. A directory that

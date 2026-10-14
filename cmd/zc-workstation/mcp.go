@@ -31,6 +31,8 @@ func mcpServer(stateDir string) *mcp.Server {
 		Tools: []mcp.Tool{
 			{Name: "status", Desc: "What is live for each target right now, without diffing. Read-only.",
 				Cmd: []string{"status"}, Props: []mcp.Prop{cfg, target}, Tail: []string{"-json"}},
+			{Name: "list", Desc: "Every package, dotfile and runtime the targets declare, with state, version, app and description. Read-only.",
+				Cmd: []string{"list"}, Props: []mcp.Prop{cfg, target}, Tail: []string{"-json"}},
 			{Name: "validate", Desc: "Check the config offline. Read-only.",
 				Cmd: []string{"validate"}, Props: []mcp.Prop{cfg}},
 			{Name: "plan", Desc: "Read live state and list what would change. Changes nothing. Returns a plan_id for apply.",

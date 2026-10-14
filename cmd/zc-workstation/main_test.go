@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -98,7 +99,7 @@ func TestValidateDoctorVersionAndErrors(t *testing.T) {
 	var report struct {
 		Checks []struct{ Name, Status string }
 	}
-	if jerr := json.Unmarshal([]byte(out[:strings.LastIndex(out, "}")+1]), &report); jerr != nil || len(report.Checks) != 3 {
+	if jerr := json.Unmarshal([]byte(out[:strings.LastIndex(out, "}")+1]), &report); jerr != nil || len(report.Checks) != 4 {
 		t.Fatalf("doctor: %v %v\n%s", err, jerr, out)
 	}
 	if out, _ := run(t, "", "version"); out != "dev\n" {
@@ -115,5 +116,46 @@ func TestValidateDoctorVersionAndErrors(t *testing.T) {
 		if !strings.Contains(out, name+" "+cmd) {
 			t.Fatalf("usage lacks %s:\n%s", cmd, out)
 		}
+	}
+}
+
+// Under mcp, standard output is the protocol: an installer's output must go
+// to the command's stderr, never its stdout.
+func TestInstallerOutputGoesToStderr(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("uses a shell script as a fake brew")
+	}
+	bin := t.TempDir()
+	brew := "#!/bin/sh\ncase \"$1\" in install) echo INSTALLER-OUTPUT;; esac\n"
+	if err := os.WriteFile(filepath.Join(bin, "brew"), []byte(brew), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "Brewfile"), []byte("brew \"hello\"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg := filepath.Join(dir, "zc-workstation.yaml")
+	body := "version: 1\ntargets: [{name: pk, provider: packages, manager: brew, file: Brewfile}]\n"
+	if err := os.WriteFile(cfg, []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var out, errOut bytes.Buffer
+	// The fake never really installs, so verify reports it outstanding.
+	_ = runCLI([]string{"apply", "-config", cfg}, strings.NewReader(""), &out, &errOut)
+	if strings.Contains(out.String(), "INSTALLER-OUTPUT") || !strings.Contains(errOut.String(), "INSTALLER-OUTPUT") {
+		t.Fatalf("stdout %q\nstderr %q", out.String(), errOut.String())
+	}
+}
+
+func TestListShowsEveryItem(t *testing.T) {
+	cfg, _ := fixture(t)
+	out, err := run(t, "", "list", "-config", cfg)
+	if err != nil || !strings.Contains(out, "TARGET") || !strings.Contains(out, "notes   file  a.txt  missing") {
+		t.Fatalf("list: %v\n%s", err, out)
+	}
+	out, err = run(t, "", "list", "-config", cfg, "-json")
+	if err != nil || !strings.Contains(out, `"name": "a.txt"`) || !strings.Contains(out, `"state": "missing"`) {
+		t.Fatalf("list -json: %v\n%s", err, out)
 	}
 }

@@ -35,6 +35,8 @@ version: 2
 targets:
   - name: Bad_Name
     provider: s3
+  - name: escape
+    provider: localdir
     files:
       ../escape: x
   - name: ok
@@ -47,7 +49,7 @@ targets:
 	if err == nil {
 		t.Fatal("invalid config accepted")
 	}
-	for _, want := range []string{"version is 2", "kebab-case", `provider "s3"`, "path is required", "inside the target path", "declared twice"} {
+	for _, want := range []string{"version is 2", "kebab-case", `provider "s3"`, "path is required for provider localdir", "inside the target path", "declared twice"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("error lacks %q:\n%v", want, err)
 		}
@@ -76,5 +78,52 @@ func TestLoadResolvesPathsAgainstTheFile(t *testing.T) {
 	cfg, err = Load("-", strings.NewReader("version: 1\n"))
 	if err != nil || cfg.Dir != "" {
 		t.Fatalf("stdin: %+v %v", cfg, err)
+	}
+}
+
+func TestParseChecksEachProvidersFields(t *testing.T) {
+	_, err := Parse([]byte(`
+version: 1
+targets:
+  - {name: pk, provider: packages, manager: pacman, os: [plan9]}
+  - {name: df, provider: dotfiles, mode: hardlink, file: x}
+  - {name: tl, provider: tools, source: home}
+`))
+	if err == nil {
+		t.Fatal("invalid config accepted")
+	}
+	for _, want := range []string{
+		"target pk: file is required", `manager "pacman"`, `os "plan9"`,
+		"target df: source is required", `mode "hardlink"`, "target df: file does nothing",
+		"target tl: file is required", "target tl: source does nothing",
+	} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error lacks %q:\n%v", want, err)
+		}
+	}
+}
+
+func TestResolveExpandsHomeAndRelativePaths(t *testing.T) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Skip(err)
+	}
+	dir, abs := t.TempDir(), t.TempDir()
+	c := Config{Dir: dir}
+	got := c.Resolve(Target{File: "packages/Brewfile", Source: "~/dots", Destination: abs})
+	if got.File != filepath.Join(dir, "packages/Brewfile") || got.Source != filepath.Join(home, "dots") || got.Destination != abs {
+		t.Fatalf("resolved %+v", got)
+	}
+}
+
+func TestForOS(t *testing.T) {
+	if !(Target{}).ForOS("linux") || (Target{OS: []string{"darwin"}}).ForOS("linux") {
+		t.Fatal("ForOS")
+	}
+}
+
+func TestExampleConfigIsValid(t *testing.T) {
+	if _, err := Load(filepath.Join("..", "..", "zc-workstation.example.yaml"), nil); err != nil {
+		t.Fatal(err)
 	}
 }

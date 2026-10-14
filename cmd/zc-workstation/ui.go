@@ -13,6 +13,7 @@ import (
 	"github.com/zoolcoder/toolshell/activity"
 	"github.com/zoolcoder/toolshell/guard"
 	"github.com/zoolcoder/zc-workstation/internal/engine"
+	"github.com/zoolcoder/zc-workstation/internal/sh"
 	"github.com/zoolcoder/zc-workstation/internal/ui"
 )
 
@@ -45,8 +46,10 @@ func serveUI(ctx context.Context, addr, configPath, dataDir string, stdout io.Wr
 		Name:       name,
 		ConfigPath: configPath,
 		Activity:   &activity.Log{Path: filepath.Join(dataDir, "activity.jsonl")},
-		Providers:  engine.Default(),
-		Host:       addr,
+		// The page runs in the background: installers get no stdin, and
+		// their output goes to the terminal that started it.
+		Providers: engine.With(sh.Exec{Stdout: os.Stderr, Stderr: os.Stderr}),
+		Host:      addr,
 	})
 	if err != nil {
 		return err

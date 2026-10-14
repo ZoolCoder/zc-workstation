@@ -1,0 +1,5 @@
+# One package per line, as dnf names them.
+git
+zsh
+tmux
+curl

@@ -1,20 +1,47 @@
 # zc-workstation config. Copy to zc-workstation.yaml (ignored by git) or
-# ~/.config/zc-workstation/zc-workstation.yaml, then run
-# `zc-workstation plan`.
+# ~/.config/zc-workstation/zc-workstation.yaml, point the paths at your own
+# dotfiles repo, then run `zc-workstation plan`. Plan only reads; apply asks.
+#
+# Relative paths are relative to this file's directory; ~ is your home.
 version: 1
 
 targets:
-  # localdir keeps a directory holding exactly these files. Paths are relative
-  # to this config file's directory.
-  - name: notes
-    provider: localdir
-    path: build/notes
-    # prune: true also deletes files on disk that are not listed here. A plan
-    # that deletes always asks before applying.
-    prune: false
-    files:
-      README.md: |
-        # Notes
-        Managed by zc-workstation; edit the config, not this file.
-      todo/today.md: |
-        - write the provider for the real system
+  # packages installs what a manifest declares and never uninstalls. The
+  # manager follows the system: brew on macOS, apt or dnf on Linux, winget on
+  # Windows. Set manager: brew to use Homebrew on Linux too.
+  - name: brew
+    provider: packages
+    os: [darwin]
+    file: example/Brewfile
+
+  - name: apt
+    provider: packages
+    os: [linux]
+    manager: apt
+    file: example/apt.txt
+
+  - name: dnf
+    provider: packages
+    os: [linux]
+    manager: dnf
+    file: example/dnf.txt
+
+  - name: winget
+    provider: packages
+    os: [windows]
+    file: example/winget.json
+
+  # dotfiles applies a chezmoi source directory to your home directory. Use
+  # chezmoi's naming (dot_zshrc, private_, .tmpl) and its templates for
+  # per-machine differences.
+  - name: dotfiles
+    provider: dotfiles
+    source: example/home
+    # destination: ~        # the default
+    # mode: symlink         # link instead of copy; edits land in the repo
+
+  # tools installs the runtimes a mise config pins. Only tools declared in
+  # this file count, not ones from your global mise config.
+  - name: runtimes
+    provider: tools
+    file: example/mise.toml

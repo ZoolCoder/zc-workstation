@@ -6,6 +6,9 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"os"
+	"os/exec"
+	"runtime"
 
 	"github.com/zoolcoder/toolshell/doctor"
 	"github.com/zoolcoder/zc-workstation/internal/config"
@@ -26,6 +29,8 @@ func runDoctor(args []string, _ io.Reader, stdout, stderr io.Writer) error {
 
 	r := doctor.New(version)
 	r.AddCheck(doctor.Binary(name))
+	host, _ := os.Hostname()
+	r.Add("system", doctor.OK, fmt.Sprintf("%s %s/%s", host, runtime.GOOS, runtime.GOARCH))
 	cfg, err := config.Load(*path, nil)
 	r.Err("config", err, fmt.Sprintf("%s, %d target(s)", *path, len(cfg.Targets)))
 	if err == nil {
@@ -33,11 +38,21 @@ func runDoctor(args []string, _ io.Reader, stdout, stderr io.Writer) error {
 		if err != nil {
 			r.Add("targets", doctor.Fail, err.Error())
 		} else {
-			for _, st := range eng.Status(context.Background()) {
-				if st.Error != "" {
-					r.Add("target "+st.Target, doctor.Fail, st.Error)
+			for _, p := range eng.Programs() {
+				if path, err := exec.LookPath(p); err != nil {
+					r.Add("program "+p, doctor.Fail, "not on PATH")
 				} else {
+					r.Add("program "+p, doctor.OK, path)
+				}
+			}
+			for _, st := range eng.Status(context.Background()) {
+				switch {
+				case st.Error != "":
+					r.Add("target "+st.Target, doctor.Fail, st.Error)
+				case st.Skipped || st.InSync():
 					r.Add("target "+st.Target, doctor.OK, st.Summary)
+				default:
+					r.Add("target "+st.Target, doctor.Warn, st.Summary)
 				}
 			}
 		}

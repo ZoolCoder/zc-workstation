@@ -1,6 +1,7 @@
-// Command zc-workstation reconciles declared state from a YAML file: plan
-// shows what differs, apply makes it so and verifies, status reads what is
-// live.
+// Command zc-workstation sets up a workstation from a YAML file on macOS,
+// Linux and Windows: packages, dotfiles through chezmoi, runtimes through
+// mise. plan shows what differs, apply makes it so and verifies, status reads
+// what is in place.
 package main
 
 import (
@@ -17,6 +18,7 @@ import (
 	"github.com/zoolcoder/zc-workstation/internal/config"
 	"github.com/zoolcoder/zc-workstation/internal/engine"
 	"github.com/zoolcoder/zc-workstation/internal/plan"
+	"github.com/zoolcoder/zc-workstation/internal/sh"
 )
 
 const (
@@ -39,14 +41,16 @@ var (
 	optionalUsage []string
 )
 
-const usageHead = name + ` reconciles declared state from a YAML file.
+const usageHead = name + ` sets up this machine from a YAML file: packages, dotfiles
+(chezmoi) and runtimes (mise), on macOS, Linux and Windows.
 
 Usage:
   ` + name + ` plan     [flags]        show what would change (default)
   ` + name + ` apply    [flags] [file] make the changes; with a saved plan, exactly those
-  ` + name + ` status   [flags]        what is live right now, without diffing
+  ` + name + ` status   [flags]        what is in place right now, per target
+  ` + name + ` list     [flags]        every package, dotfile and runtime, with versions
   ` + name + ` validate [flags]        check the config offline
-  ` + name + ` doctor   [-json]        install health: binary, config, targets
+  ` + name + ` doctor   [-json]        health: system, config, programs, targets
 `
 
 const usageTail = `  ` + name + ` version
@@ -63,7 +67,7 @@ Flags:
   -target value    limit to this target; repeat for several
   -yes             skip the confirmation prompt for deletions
   -exit-code       plan: exit 2 for changes, 3 for manual-only
-  -json            plan and status: machine-readable
+  -json            plan, status and list: machine-readable
   -out string      plan: save the plan, to apply exactly what you reviewed
 `
 
@@ -115,7 +119,7 @@ func runCLI(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 		return err
 	case "doctor":
 		return runDoctor(args, stdin, stdout, stderr)
-	case "plan", "apply", "status", "validate":
+	case "plan", "apply", "status", "list", "validate":
 	default:
 		if run, ok := optional[cmd]; ok {
 			return run(args, stdin, stdout, stderr)
@@ -164,7 +168,11 @@ func runCLI(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 		saved = &s
 	}
 
-	eng, err := engine.New(cfg, engine.Default(), targets)
+	// Installers talk through this command's streams, never the process's:
+	// under mcp, standard output is the protocol. Their output goes to stderr
+	// so -json output stays parseable.
+	runner := sh.Exec{Stdin: stdin, Stdout: stderr, Stderr: stderr}
+	eng, err := engine.New(cfg, engine.With(runner), targets)
 	if err != nil {
 		return err
 	}
@@ -172,6 +180,9 @@ func runCLI(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 
 	if cmd == "status" {
 		return writeStatus(stdout, eng.Status(ctx), *asJSON)
+	}
+	if cmd == "list" {
+		return writeItems(stdout, eng.Items(ctx), *asJSON)
 	}
 
 	p, err := eng.Plan(ctx)
