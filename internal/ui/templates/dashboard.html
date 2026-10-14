@@ -1,6 +1,7 @@
 {{template "zc-top" .}}
 <div class="top">
   <div><h1 class="pg">{{$.T "This machine"}}</h1><p class="sub">{{.System}} · {{$.T "what the config declares, and what is in place right now"}}</p></div>
+  <div class="hero-art">{{template "zc-orbit"}}</div>
 </div>
 {{if .ConfigErr}}<p class="callout bad"><b>{{$.T "config"}}</b> <span class="err">{{.ConfigErr}}</span></p>{{else}}
 

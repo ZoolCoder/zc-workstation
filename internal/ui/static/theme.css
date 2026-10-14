@@ -22,6 +22,7 @@
   --edge:var(--none);--nav-glow:var(--none);--btn-glow:var(--none);--ok-glow:var(--none);--bad-glow:var(--none);--acc-glow:var(--none);
   --bloom1:rgba(36,87,230,.06);--bloom2:transparent;--bloom3:transparent;--grid:rgba(17,19,24,.07);--arc:transparent;
   --ring:0 0 0 3px rgba(36,87,230,.28);--scrim:rgba(17,19,24,.4);
+  --orb-glow:rgba(36,87,230,.12);--orb-ring:rgba(17,19,24,.16);--orb-hot:rgba(36,87,230,.55);--orb-blade:#2457E6;--orb-node:#2457E6;
 }
 /* space: the same tokens for the dark choice and for auto on a dark system */
 :root[data-theme="dark"]{
@@ -33,6 +34,7 @@
   --shadow:0 1px 0 rgba(255,255,255,.02);--lift:0 18px 48px rgba(0,0,0,.5);--pop-shadow:0 28px 70px rgba(0,0,0,.6);
   --bloom1:rgba(61,123,255,.22);--grid:rgba(156,195,255,.16);
   --ring:0 0 0 3px rgba(61,123,255,.45);--scrim:rgba(5,6,10,.7);
+  --orb-glow:rgba(61,123,255,.30);--orb-ring:rgba(243,245,247,.14);--orb-hot:rgba(156,195,255,.55);--orb-blade:#9CC3FF;--orb-node:#3D7BFF;
   color-scheme:dark;
 }
 @media (prefers-color-scheme:dark){
@@ -45,6 +47,7 @@
     --shadow:0 1px 0 rgba(255,255,255,.02);--lift:0 18px 48px rgba(0,0,0,.5);--pop-shadow:0 28px 70px rgba(0,0,0,.6);
     --bloom1:rgba(61,123,255,.22);--grid:rgba(156,195,255,.16);
     --ring:0 0 0 3px rgba(61,123,255,.45);--scrim:rgba(5,6,10,.7);
+    --orb-glow:rgba(61,123,255,.30);--orb-ring:rgba(243,245,247,.14);--orb-hot:rgba(156,195,255,.55);--orb-blade:#9CC3FF;--orb-node:#3D7BFF;
     color-scheme:dark;
   }
 }
@@ -76,3 +79,27 @@ th,.navh,.next-k,.kpi .lbl,.panel-h .n{font-family:var(--mono);text-transform:up
 .chip{border-radius:999px}
 .panel,.kpi{border-radius:12px}
 .next{border-radius:12px}
+
+/* The orbit art: the mark with nodes riding tilted orbits, slowly. Only this
+   glows, as the hero object. Reduced motion holds every node in place. */
+.zc-orbit{display:block;width:100%;height:auto;overflow:visible}
+.zc-orbit .orb-g0{stop-color:var(--orb-glow)}
+.zc-orbit .orb-g1{stop-color:var(--orb-glow);stop-opacity:0}
+.zc-orbit .orb-ring{fill:none;stroke:var(--orb-ring);stroke-width:1.2}
+.zc-orbit .orb-ring.orb-hot{stroke:var(--orb-hot);stroke-width:1.6}
+.zc-orbit .orb-ring.orb-far{stroke-dasharray:2 7}
+.zc-orbit .orb-ink{fill:var(--fg)}
+.zc-orbit .orb-blade{fill:var(--orb-blade)}
+.zc-orbit .orb-node{fill:var(--fg);opacity:.7;animation:orb-ride linear infinite}
+.zc-orbit .orb-node.orb-hot{fill:var(--orb-node);opacity:1}
+.zc-orbit .orb-r1{offset-path:path("M120,0A120,44 0 1,1 -120,0A120,44 0 1,1 120,0");animation-duration:36s}
+.zc-orbit .orb-r2{offset-path:path("M185,0A185,70 0 1,1 -185,0A185,70 0 1,1 185,0");animation-duration:60s}
+.zc-orbit .orb-r3{offset-path:path("M255,0A255,98 0 1,1 -255,0A255,98 0 1,1 255,0");animation-duration:96s}
+.zc-orbit .orb-r1.orb-b{animation-delay:-18s}
+.zc-orbit .orb-r2.orb-a{animation-delay:-8s}.orbit .orb-r2.orb-b{animation-delay:-28s}.orbit .orb-r2.orb-c{animation-delay:-48s}
+.zc-orbit .orb-r3.orb-a{animation-delay:-30s}.orbit .orb-r3.orb-b{animation-delay:-78s}
+@keyframes orb-ride{to{offset-distance:100%}}
+@media (prefers-reduced-motion:reduce){.orbit .orb-node{animation-play-state:paused}}
+.top .hero-art{flex:none;width:360px;margin:-44px -16px -64px 0}
+.errpage .err-art{width:min(340px,80vw);margin:0 auto -12px}
+@media (max-width:760px){.top .hero-art{display:none}}

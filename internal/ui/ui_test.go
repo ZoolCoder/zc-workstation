@@ -65,6 +65,11 @@ func TestThemeLoadsOnEveryPage(t *testing.T) {
 			t.Errorf("%s: no theme stylesheet", path)
 		}
 	}
+	for _, path := range []string{"/", "/nope"} {
+		if w := do(s, http.MethodGet, path, nil); !strings.Contains(w.Body.String(), `<svg class="zc-orbit"`) {
+			t.Errorf("%s: no orbit art", path)
+		}
+	}
 	for _, path := range []string{"/zc/theme.css", "/zc/fonts/unbounded-latin-wght-normal.woff2"} {
 		if w := do(s, http.MethodGet, path, nil); w.Code != http.StatusOK {
 			t.Errorf("%s: %d", path, w.Code)
