@@ -7,9 +7,9 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/zoolcoder/toolshell/doctor"
 	"github.com/zoolcoder/zc-workstation/internal/config"
 	"github.com/zoolcoder/zc-workstation/internal/engine"
-	"github.com/zoolcoder/toolshell/doctor"
 )
 
 // runDoctor checks the install: the binary on PATH, the config, and that

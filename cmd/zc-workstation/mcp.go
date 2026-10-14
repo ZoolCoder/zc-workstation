@@ -6,8 +6,8 @@ import (
 	"io"
 	"strings"
 
-	"github.com/zoolcoder/zc-workstation/skills"
 	"github.com/zoolcoder/toolshell/mcp"
+	"github.com/zoolcoder/zc-workstation/skills"
 )
 
 func init() {

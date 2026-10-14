@@ -6,6 +6,7 @@ coverage.out
 # The live config: each user keeps their own.
 /zc-workstation.yaml
 *.secrets
+*.pem
 .env
 .dev.vars
 

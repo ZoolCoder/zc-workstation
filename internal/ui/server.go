@@ -14,11 +14,11 @@ import (
 	"sync"
 	"time"
 
+	"github.com/zoolcoder/toolshell"
+	"github.com/zoolcoder/toolshell/activity"
 	"github.com/zoolcoder/zc-workstation/internal/config"
 	"github.com/zoolcoder/zc-workstation/internal/engine"
 	"github.com/zoolcoder/zc-workstation/internal/plan"
-	"github.com/zoolcoder/toolshell"
-	"github.com/zoolcoder/toolshell/activity"
 )
 
 //go:embed templates/*.html
