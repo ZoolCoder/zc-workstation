@@ -36,7 +36,7 @@ targets:
 
 | `version` | Always `1`. A future format bumps it.
 | `name` | Lowercase kebab case, unique. `-target` selects by it.
-| `provider` | `packages`, `dotfiles`, `tools` or `localdir`.
+| `provider` | `packages`, `dotfiles`, `tools`, `desktop` or `localdir`.
 | `os` | The systems the target is for: `darwin`, `linux`, `windows`. Empty means every system.
 |===
 
@@ -54,6 +54,8 @@ targets:
 | | `mode` | `file` copies (the default); `symlink` links back into the source.
 | `tools` | `file` | Required. The mise config file whose tools to install.
 | | `upgrade` | Also plan an `UPDATE` for each runtime with a newer version that its request allows. Off by default.
+| `desktop` | `wallpaper` | The picture to show on every desktop.
+| | `screensaver` | The web page for WebViewScreenSaver to show. Set this, `wallpaper`, or both. The target needs `os: [darwin]`.
 | `localdir` | `path` | Required. The directory to keep.
 | | `files` | File name to content. Names must stay inside `path`.
 | | `prune` | Also delete files in `path` the config does not list.

@@ -27,6 +27,7 @@ It drives the tools that already do each job well:
 | `packages` | Brewfile, apt, dnf, winget | brew, mas, apt-get, dnf, winget    |
 | `dotfiles` | A chezmoi source directory | [chezmoi](https://www.chezmoi.io)  |
 | `tools`    | A mise config              | [mise](https://mise.jdx.dev)       |
+| `desktop`  | macOS wallpaper, screen saver | osascript, [WebViewScreenSaver](https://github.com/liquidx/webviewscreensaver) |
 | `localdir` | Files written in the config | itself                         |
 
 A target can name the systems it is for (`os: [darwin]`), so one config

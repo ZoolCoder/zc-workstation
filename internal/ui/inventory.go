@@ -55,6 +55,10 @@ type inventoryPage struct {
 // appKinds are the package kinds that install desktop applications.
 var appKinds = []string{"cask", "mas", "winget"}
 
+// notTools are the item kinds that are neither an application nor a
+// command-line package.
+var notTools = []string{"tap", "script", "file", "wallpaper", "screensaver"}
+
 func (s *Server) inventory(w http.ResponseWriter, r *http.Request) {
 	p := inventoryPage{chrome: s.chrome(r, "inventory")}
 	p.Title = p.T("Inventory")
@@ -102,7 +106,7 @@ func (p *inventoryPage) fill(targets []engine.TargetItems) {
 				p.Runtimes.add(i)
 			case slices.Contains(appKinds, i.Kind):
 				p.Desktop.add(i)
-			case i.Kind != "tap" && i.Kind != "script" && i.Kind != "file":
+			case !slices.Contains(notTools, i.Kind):
 				p.Tools.add(i)
 			}
 		}

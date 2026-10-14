@@ -47,3 +47,11 @@ targets:
     provider: tools
     file: example/mise.toml
     # upgrade: true         # also upgrade runtimes within their pins
+
+  # desktop sets the macOS desktop picture and the page the WebViewScreenSaver
+  # screen saver shows. The ZoolCoder art ships in assets/.
+  - name: look
+    provider: desktop
+    os: [darwin]
+    wallpaper: assets/wallpaper/zc-workstation-laptop-dark.png
+    screensaver: assets/screensaver/index.html

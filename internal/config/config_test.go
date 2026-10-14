@@ -87,7 +87,9 @@ version: 1
 targets:
   - {name: pk, provider: packages, manager: pacman, os: [plan9]}
   - {name: df, provider: dotfiles, mode: hardlink, file: x, upgrade: true}
-  - {name: tl, provider: tools, source: home}
+  - {name: tl, provider: tools, source: home, wallpaper: w.png}
+  - {name: dk, provider: desktop, file: x}
+  - {name: dl, provider: desktop, os: [darwin, linux], screensaver: s.html}
 `))
 	if err == nil {
 		t.Fatal("invalid config accepted")
@@ -95,7 +97,9 @@ targets:
 	for _, want := range []string{
 		"target pk: file is required", `manager "pacman"`, `os "plan9"`,
 		"target df: source is required", `mode "hardlink"`, "target df: file does nothing", "target df: upgrade does nothing",
-		"target tl: file is required", "target tl: source does nothing",
+		"target tl: file is required", "target tl: source does nothing", "target tl: wallpaper does nothing",
+		"target dk: set wallpaper, screensaver or both", "target dk: file does nothing", "target dk: provider desktop drives macOS only",
+		"target dl: provider desktop drives macOS only",
 	} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("error lacks %q:\n%v", want, err)

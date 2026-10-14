@@ -143,6 +143,33 @@ directory's config are ignored.
 * mise refuses to read a config it does not trust. The plan then shows a
   `MANUAL` step: read the file, then run `mise trust`.
 
+[#desktop]
+== desktop
+
+Sets how a Mac looks: the desktop picture, and the page the
+https://github.com/liquidx/webviewscreensaver[WebViewScreenSaver] screen saver
+shows. macOS only, so the target needs `os: [darwin]`.
+
+* *Wallpaper.* The plan reads every desktop's picture through System Events
+  (`osascript`). If any desktop shows another one, the plan has one `UPDATE`;
+  apply sets the picture on every desktop. The first run asks you to let your
+  terminal control System Events.
+* *Screen saver.* The plan reads the saver's page list with `defaults read`
+  from its per-host preferences, in the legacy screen saver container. If it
+  lists another page, or none, apply writes the one page with `defaults
+  write`, shown until you return.
+* If WebViewScreenSaver is not installed, in `~/Library/Screen Savers` or
+  `/Library/Screen Savers`, the plan is a `MANUAL` step: add
+  `cask "webviewscreensaver"` to a Brewfile target.
+* Choosing WebViewScreenSaver as the screen saver is yours to do, once, in
+  System Settings, Screen Saver. macOS keeps that choice where no tool should
+  write it.
+* A file that does not exist, such as a wallpaper not rendered yet, is a
+  `MANUAL` step.
+
+The saver lets a page read only its own folder, so keep the page's fonts and
+images beside it, and outside Documents, Desktop and Downloads.
+
 [#localdir]
 == localdir
 

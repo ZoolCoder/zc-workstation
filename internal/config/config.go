@@ -21,7 +21,7 @@ const Version = 1
 
 // Providers lists the provider names a target may use. A new provider adds
 // its name here and its package under internal/provider.
-var Providers = []string{"localdir", "packages", "dotfiles", "tools"}
+var Providers = []string{"localdir", "packages", "dotfiles", "tools", "desktop"}
 
 // Systems are the values of a target's os list, as Go names them.
 var Systems = []string{"darwin", "linux", "windows"}
@@ -65,6 +65,11 @@ type Target struct {
 	Prune bool `yaml:"prune"`
 	// Files maps a path relative to Path to the content it should hold.
 	Files map[string]string `yaml:"files"`
+	// Wallpaper is the picture the desktop provider sets on every desktop.
+	Wallpaper string `yaml:"wallpaper"`
+	// Screensaver is the web page the desktop provider has WebViewScreenSaver
+	// show.
+	Screensaver string `yaml:"screensaver"`
 }
 
 // Root is the target's directory, resolved against the config's directory.
@@ -75,6 +80,7 @@ func (c Config) Root(t Target) string { return c.resolve(t.Path) }
 func (c Config) Resolve(t Target) Target {
 	t.Path, t.File, t.Source = c.resolve(t.Path), c.resolve(t.File), c.resolve(t.Source)
 	t.Destination = c.resolve(t.Destination)
+	t.Wallpaper, t.Screensaver = c.resolve(t.Wallpaper), c.resolve(t.Screensaver)
 	return t
 }
 
@@ -232,6 +238,13 @@ func (t Target) validateFields(where string) []error {
 		}
 	case "tools":
 		need("file", t.File)
+	case "desktop":
+		if t.Wallpaper == "" && t.Screensaver == "" {
+			errs = append(errs, fmt.Errorf("%s: set wallpaper, screensaver or both for provider desktop", where))
+		}
+		if !slices.Equal(t.OS, []string{"darwin"}) {
+			errs = append(errs, fmt.Errorf("%s: provider desktop drives macOS only; set os: [darwin]", where))
+		}
 	}
 	if t.Provider != "localdir" {
 		unused("path", t.Path != "")
@@ -249,8 +262,12 @@ func (t Target) validateFields(where string) []error {
 		unused("destination", t.Destination != "")
 		unused("mode", t.Mode != "")
 	}
-	if t.Provider == "localdir" || t.Provider == "dotfiles" {
+	if t.Provider == "localdir" || t.Provider == "dotfiles" || t.Provider == "desktop" {
 		unused("file", t.File != "")
+	}
+	if t.Provider != "desktop" {
+		unused("wallpaper", t.Wallpaper != "")
+		unused("screensaver", t.Screensaver != "")
 	}
 	return errs
 }

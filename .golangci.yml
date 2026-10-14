@@ -63,3 +63,5 @@ linters:
               desc: use the engine
             - pkg: github.com/zoolcoder/zc-workstation/internal/provider/localdir
               desc: use the engine
+            - pkg: github.com/zoolcoder/zc-workstation/internal/provider/desktop
+              desc: use the engine

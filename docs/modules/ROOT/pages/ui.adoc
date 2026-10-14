@@ -75,8 +75,17 @@ and Alexandria for text. Pick light, dark or the system's choice from the
 account menu. The fonts are served by the dashboard itself, under the SIL Open
 Font License, so the page loads nothing from the internet.
 
-A matching desktop wallpaper is in `assets/wallpaper`. Run
-`assets/wallpaper/render.sh` to draw it as 5120×3200 PNGs, dark and light.
+The same orbit art dresses the Mac itself, and the
+xref:providers.adoc#desktop[desktop provider] sets it:
+
+* `assets/wallpaper` holds the wallpaper, dark and light, at 3024×1964 for a
+  14-inch MacBook Pro. The title sits top left, clear of the notch and the
+  Dock. `assets/wallpaper/render.sh` draws it again, plus 5120×3200 for 5K
+  displays.
+* `assets/screensaver/index.html` is the screen saver: the orbits turn, the
+  stars twinkle, and a clock shows the time and date. The scene drifts slowly
+  so nothing stays in one place. Add `?light` for paper, or `?still` for no
+  motion; the system's reduced motion setting also stops it.
 
 == Local only
 

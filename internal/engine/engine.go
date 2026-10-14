@@ -14,6 +14,7 @@ import (
 	"github.com/zoolcoder/zc-workstation/internal/config"
 	"github.com/zoolcoder/zc-workstation/internal/plan"
 	"github.com/zoolcoder/zc-workstation/internal/provider"
+	"github.com/zoolcoder/zc-workstation/internal/provider/desktop"
 	"github.com/zoolcoder/zc-workstation/internal/provider/dotfiles"
 	"github.com/zoolcoder/zc-workstation/internal/provider/localdir"
 	"github.com/zoolcoder/zc-workstation/internal/provider/packages"
@@ -37,6 +38,7 @@ func With(r sh.Runner) Providers {
 		"packages": packages.New(r, GOOS),
 		"dotfiles": dotfiles.New(r),
 		"tools":    tools.New(r),
+		"desktop":  desktop.New(r),
 	}
 }
 
