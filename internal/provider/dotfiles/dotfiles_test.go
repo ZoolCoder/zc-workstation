@@ -82,6 +82,7 @@ func TestAppOf(t *testing.T) {
 		".local/share/atuin/init.nu":                          "atuin",
 		"Library/Application Support/Code/User/settings.json": "Code",
 		"AppData/Roaming/alacritty/alacritty.toml":            "alacritty",
+		"Library/LaunchAgents/local.ssh-add-enclave.plist":    "launchd",
 		".zshrc":            "zsh",
 		".zprofile":         "zsh",
 		".gitconfig":        "git",

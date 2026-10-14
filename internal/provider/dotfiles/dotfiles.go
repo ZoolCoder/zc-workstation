@@ -248,6 +248,10 @@ var aliases = map[string]string{
 // .config/ghostty/config is ghostty, .zshrc is zsh, .gitconfig is git.
 func appOf(path string) string {
 	parts := strings.Split(path, "/")
+	// A login item configures launchd itself, whatever job it runs.
+	if len(parts) > 2 && parts[0] == "Library" && parts[1] == "LaunchAgents" {
+		return "launchd"
+	}
 	for _, home := range homes {
 		if len(parts) > len(home) && slices.Equal(parts[:len(home)], home) {
 			name, _, _ := strings.Cut(parts[len(home)], ".")

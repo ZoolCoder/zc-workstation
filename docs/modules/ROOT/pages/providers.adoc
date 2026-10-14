@@ -106,7 +106,8 @@ The plan is `chezmoi status`:
 
 In the inventory each file names the app it configures: the folder under
 `.config`, `.local/share`, `Library/Application Support` or `AppData`, else
-the file's own name (`.zshrc` is `zsh`, `.gitconfig` is `git`).
+the file's own name (`.zshrc` is `zsh`, `.gitconfig` is `git`). A login item
+under `Library/LaunchAgents` is `launchd`.
 
 A file edited since chezmoi last wrote it says so in the plan:
 `changed outside chezmoi, apply overwrites it`. Copy your edit into the source
