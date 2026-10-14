@@ -67,6 +67,17 @@ action, and the apply panel takes over from there.
 Every plan and apply is recorded on the *Activity* page, in a JSON lines file
 under the user data directory (`-data` changes it).
 
+== Look
+
+The page wears the ZoolCoder identity: paper and ink in light, deep space and
+electric blue in dark, with Unbounded for titles, JetBrains Mono for labels
+and Alexandria for text. Pick light, dark or the system's choice from the
+account menu. The fonts are served by the dashboard itself, under the SIL Open
+Font License, so the page loads nothing from the internet.
+
+A matching desktop wallpaper is in `assets/wallpaper`. Run
+`assets/wallpaper/render.sh` to draw it as 5120×3200 PNGs, dark and light.
+
 == Local only
 
 The page has no login. It listens on loopback only, answers 403 to a foreign

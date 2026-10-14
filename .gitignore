@@ -31,3 +31,6 @@ coverage.out
 # local workspace: links unpublished sibling modules
 go.work
 go.work.sum
+
+# rendered wallpapers; assets/wallpaper/render.sh draws them
+/assets/wallpaper/*.png
