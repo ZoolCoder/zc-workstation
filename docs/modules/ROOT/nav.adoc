@@ -6,3 +6,4 @@
 * xref:agents.adoc[Agents and MCP]
 * xref:extending.adoc[Adding a provider]
 * xref:security.adoc[Threat model]
+* xref:roadmap.adoc[Roadmap]

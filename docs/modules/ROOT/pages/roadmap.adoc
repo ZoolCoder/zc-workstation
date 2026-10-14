@@ -1,0 +1,180 @@
+= Roadmap: zc-workstation
+:description: The plan to replace aurora-mac with zc-workstation, a Go CLI on top of chezmoi that sets up macOS, Linux and Windows from one repo.
+
+aurora-mac sets up one kind of machine, a Mac, with about 850 lines of shell.
+Its successor, *zc-workstation*, sets up macOS, Linux and Windows from one
+repo. It is a new repository. aurora-mac stays as it is until zc-workstation
+reaches parity on macOS, and then it is archived.
+
+== Decisions
+
+[%header,cols="1,3"]
+|===
+|Question |Decision
+
+|Engine
+|chezmoi applies the dotfiles. A thin Go CLI does the glue that chezmoi does not do.
+
+|Platforms
+|Phased: macOS parity first, then Linux, then native Windows.
+
+|Repository
+|New repo `github.com/ZoolCoder/zc-workstation`, MIT. The CLI binary is `zc-workstation`, with a short alias `zcw`.
+
+|Scaffold
+|Generated from go-tool-template with `zoolfleet new` (class `oss`, license MIT), so it gets the plan/apply engine, `doctor`, MCP, skills, evals, Antora docs and release workflows that the other tools already share.
+|===
+
+== Found on GitHub
+
+Searched first, so that the new code is only the glue nobody else provides.
+
+[%header,cols="2,1,1,4"]
+|===
+|Project |License |Verdict |Why
+
+|https://github.com/twpayne/chezmoi[twpayne/chezmoi] (Go, ~22k stars)
+|MIT
+|Adopt
+|Dotfiles on macOS, Linux and Windows. Per-OS templates, `run_onchange_` scripts, secrets from password managers, and a symlink mode. It replaces `link()` in `install.sh` and every per-OS branch we would otherwise write. Used as an external binary, not as a library.
+
+|https://github.com/jdx/mise[jdx/mise] (~35k stars)
+|MIT
+|Keep
+|Already manages Java, Node and Python, and works on all three systems. Its `aqua` and `github` backends can also install CLI tools (starship, lazygit, yazi, delta, atuin) the same way everywhere, which shrinks the per-OS package lists.
+
+|go-tool-template (private) and https://github.com/zoolcoder/toolshell[toolshell]
+|MIT
+|Adopt
+|Our own. Provider/plan/apply engine, `toolshell/doctor` checks, MCP server, admin UI, docs and release pipeline.
+
+|https://github.com/charmbracelet/huh[charmbracelet/huh]
+|MIT
+|Adopt
+|The pick list for `catalog`. It replaces fzf, so the picker also works in a Windows console.
+
+|https://github.com/goreleaser/goreleaser[goreleaser]
+|MIT
+|Adopt
+|Builds the binaries and publishes a Homebrew tap formula, a Scoop/winget manifest and Linux packages.
+
+|https://github.com/topgrade-rs/topgrade[topgrade-rs/topgrade]
+|GPL-3.0
+|Optional
+|Upgrades every package manager on a machine. `update` calls it only when it is installed, as a separate program. It is never vendored or linked, so its GPL does not reach this repo.
+
+|https://github.com/comtrya/comtrya[comtrya], https://github.com/volllly/rotz[rotz], https://github.com/SuperCuber/dotter[dotter]
+|MIT
+|Skip
+|Rust tools that overlap with chezmoi. They are smaller and younger, and comtrya says it is early in its development.
+
+|https://github.com/yadm-dev/yadm[yadm], dotbot
+|GPL-3.0 / MIT
+|Skip
+|Symlinks plus shell commands, with weaker Windows support than chezmoi.
+
+|Package manager wrappers (pm, pkm, tux)
+|various
+|Skip
+|Shell, Unix only. The package provider is ours, about 200 lines of Go.
+|===
+
+== How it fits together
+
+[listing]
+----
+zc-workstation/
+  cmd/zc-workstation/      CLI: init, plan, apply, update, doctor, catalog, mcp
+  internal/provider/
+    dotfiles/              runs chezmoi (source: home/)
+    packages/              brew + Brewfile, apt, dnf, winget; one manifest per OS
+    tools/                 mise install
+    settings/              macOS defaults, GNOME gsettings, Windows registry
+    services/              launchd, systemd --user timers, Task Scheduler
+  home/                    chezmoi source state; *.tmpl where the OS changes the file
+  packages/
+    Brewfile               macOS
+    apt.txt, dnf.txt       Linux
+    winget.json            Windows (winget import format)
+  docs/                    Antora
+----
+
+* `plan` shows what each provider would create, update or delete, and changes nothing.
+* `apply` runs a plan after a person says yes, from the CLI, the UI or an agent through MCP.
+* `doctor` replaces `doctor.sh`, built on `toolshell/doctor`, and adds `--json` for agents and CI.
+* `update` replaces the `update` alias: pull the repo and the overlay, `apply`, upgrade (topgrade when installed), then `doctor`.
+* The overlay stays a separate private repo. It is a second chezmoi source with its own state file and its own package manifests, applied after the public one. The path moves to `~/.config/zc-workstation/overlay`.
+* The scripts in `bin/` (git-tidy, gh-summary, prompt-pr, ci-watch, catalog) become subcommands only where they must run on Windows. Unix-only helpers stay shell scripts under `home/`.
+
+== What carries over
+
+[%header,cols="2,1,1,1"]
+|===
+|Part |macOS |Linux |Windows
+
+|zsh, antidote, starship, atuin |yes |yes |starship and atuin in PowerShell
+|tmux |yes |yes |inside WSL only
+|Terminal |Ghostty |Ghostty |WezTerm until Ghostty ships for Windows
+|git, delta, lazygit, yazi, mise |yes |yes |yes
+|VS Code, IntelliJ settings |yes |yes |yes
+|Claude Code config and hooks |yes |yes |yes, hooks rewritten where they call Unix tools
+|Theme (Catppuccin Latte/Mocha follows the system) |yes |GNOME first |yes
+|Caps Lock and Hyper key |Karabiner |keyd |PowerToys Keyboard Manager
+|Launcher |Raycast |GNOME default |PowerToys Run
+|Menu bar, window borders |SketchyBar, JankyBorders |none |none
+|Scheduled jobs |launchd |systemd --user |Task Scheduler
+|System settings |`macos.sh` |gsettings |registry
+|Clean-machine test |`scripts/vm-test.sh` (tart) |container in CI |Windows runner in CI
+|===
+
+== Phases
+
+Each phase ends with a check that proves it, not a date.
+
+[%header,cols="1,3,2"]
+|===
+|Phase |Work |Done when
+
+|0. Scaffold
+|`zoolfleet new go-tool-template` as zc-workstation (oss, MIT). Push the empty repo, with CI green.
+|`make lint test build` passes on macOS, Linux and Windows runners.
+
+|1. macOS parity
+|Move the config folders into `home/` as chezmoi source state. Write the dotfiles, packages, tools, settings and services providers. Port `doctor.sh` checks and `catalog`. Port the overlay. Release through goreleaser and a Homebrew tap.
+|On a clean macOS VM, `zc-workstation apply` gives the same result as `install.sh`. `doctor` is clean on both of your Macs. aurora-mac is no longer used.
+
+|2. Linux
+|Templates for Linux paths, `apt.txt` and `dnf.txt`, systemd timers, gsettings theme, keyd. Ubuntu LTS and Fedora.
+|`apply` then `doctor` pass in Ubuntu and Fedora containers in CI.
+
+|3. Windows
+|`winget.json`, PowerShell profile, WezTerm, PowerToys, registry settings, Task Scheduler. WSL gets the Linux profile.
+|`apply` then `doctor` pass on a Windows CI runner.
+
+|4. Retire aurora-mac
+|Archive the repo on GitHub with a pointer to zc-workstation. Rename aurora-mac-overlay to zc-workstation-overlay. Update CLAUDE.md and memory paths.
+|Nothing on any machine still reads `~/Developer/Tools/aurora-mac`.
+|===
+
+== Docs
+
+The docs move to zc-workstation with the code and change shape:
+
+* *Per-OS getting started.* One page each for macOS, Linux and Windows, in place of today's macOS-only setup page.
+* *Generated reference.* The command reference comes from the CLI's help, and the package list comes from the manifests, so neither can drift.
+* *Split by purpose.* Tutorials (first setup), how-to (add a package, add a dotfile, write an overlay), reference (commands, manifests, providers) and explanation (why chezmoi, the threat model).
+* *Workstation notes.* Claude Code, Git, Flutter, PostgreSQL, disk management and maintenance stay as notes modules, each marked with the systems it applies to.
+* *No personal paths.* Before the repo goes public, the five pages that still name personal paths are made generic. The personal detail moves to the overlay.
+* *Published.* The template's `docs.yml` workflow publishes the site to GitHub Pages.
+
+== Risks
+
+* *chezmoi copies files by default.* Editing `~/.zshrc` directly no longer edits the repo. Either use `chezmoi edit` and `chezmoi re-add`, or set `mode = "symlink"` for the files that you edit often. Decide this in phase 1.
+* *Windows has no tmux or zsh.* The Windows profile is PowerShell-first, with WSL for the Unix workflow. Parity there means the same tools and theme, not the same shell.
+* *Two dotfile engines in phase 1.* Until parity, aurora-mac and zc-workstation must not both manage one machine. Test zc-workstation on a VM, then switch each Mac once.
+
+== Not planned
+
+* Managing servers or fleets of machines. That is Ansible's job.
+* Nix or home-manager. They do not cover native Windows.
+* Applying a plan without a person's yes.
