@@ -108,7 +108,7 @@ func TestMissingSaverOrFilesAreManual(t *testing.T) {
 	if a := actions[0]; a.Op != plan.OpManual || a.Resource != "wallpaper" || !strings.Contains(a.Detail, "no picture at") {
 		t.Fatalf("wallpaper %+v", a)
 	}
-	if a := actions[1]; a.Op != plan.OpManual || a.Resource != "webviewscreensaver" || !strings.Contains(a.Detail, `cask "webviewscreensaver"`) {
+	if a := actions[1]; a.Op != plan.OpManual || a.Resource != "webviewscreensaver" || !strings.Contains(a.Detail, "build-saver.sh") {
 		t.Fatalf("saver %+v", a)
 	}
 }

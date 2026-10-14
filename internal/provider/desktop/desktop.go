@@ -18,8 +18,8 @@ import (
 	"github.com/zoolcoder/zc-workstation/internal/sh"
 )
 
-// Saver is the screen saver bundle the screensaver key needs, installed by
-// the webviewscreensaver Homebrew cask.
+// Saver is the screen saver bundle the screensaver key needs, built and
+// installed by assets/screensaver/build-saver.sh.
 const Saver = "WebViewScreenSaver.saver"
 
 type Provider struct {
@@ -102,7 +102,7 @@ func (p Provider) readScreensaver(ctx context.Context, page string) (state, stri
 	}
 	if !p.saverInstalled() {
 		return state{set: true, state: provider.Missing, resource: "webviewscreensaver",
-			detail: `install the saver: add cask "webviewscreensaver" to your Brewfile, or brew install --cask webviewscreensaver`}, "", nil
+			detail: "install the saver: run assets/screensaver/build-saver.sh from zc-workstation (needs Xcode)"}, "", nil
 	}
 	out, err := p.r.Output(ctx, "ioreg", "-rd1", "-c", "IOPlatformExpertDevice")
 	if err != nil {

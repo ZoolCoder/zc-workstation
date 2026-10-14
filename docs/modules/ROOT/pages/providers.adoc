@@ -159,8 +159,10 @@ shows. macOS only, so the target needs `os: [darwin]`.
   lists another page, or none, apply writes the one page with `defaults
   write`, shown until you return.
 * If WebViewScreenSaver is not installed, in `~/Library/Screen Savers` or
-  `/Library/Screen Savers`, the plan is a `MANUAL` step: add
-  `cask "webviewscreensaver"` to a Brewfile target.
+  `/Library/Screen Savers`, the plan is a `MANUAL` step: run
+  `assets/screensaver/build-saver.sh`. It builds the saver from source with
+  Xcode and installs it for you. The Homebrew cask is disabled, because the
+  release build fails the Gatekeeper check; a local build is not quarantined.
 * Choosing WebViewScreenSaver as the screen saver is yours to do, once, in
   System Settings, Screen Saver. macOS keeps that choice where no tool should
   write it.
