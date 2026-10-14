@@ -29,6 +29,9 @@ var Systems = []string{"darwin", "linux", "windows"}
 // Managers are the package managers the packages provider drives.
 var Managers = []string{"brew", "apt", "dnf", "winget"}
 
+// Accents are the macOS accent colours the desktop provider sets.
+var Accents = []string{"blue", "purple", "pink", "red", "orange", "yellow", "green", "graphite"}
+
 // Config is the whole file.
 type Config struct {
 	Version int      `yaml:"version"`
@@ -70,6 +73,9 @@ type Target struct {
 	// Screensaver is the web page the desktop provider has WebViewScreenSaver
 	// show.
 	Screensaver string `yaml:"screensaver"`
+	// Accent is the macOS accent colour the desktop provider sets, one of
+	// Accents.
+	Accent string `yaml:"accent"`
 }
 
 // Root is the target's directory, resolved against the config's directory.
@@ -239,8 +245,11 @@ func (t Target) validateFields(where string) []error {
 	case "tools":
 		need("file", t.File)
 	case "desktop":
-		if t.Wallpaper == "" && t.Screensaver == "" {
-			errs = append(errs, fmt.Errorf("%s: set wallpaper, screensaver or both for provider desktop", where))
+		if t.Wallpaper == "" && t.Screensaver == "" && t.Accent == "" {
+			errs = append(errs, fmt.Errorf("%s: set wallpaper, screensaver or accent for provider desktop", where))
+		}
+		if t.Accent != "" && !slices.Contains(Accents, t.Accent) {
+			errs = append(errs, fmt.Errorf("%s: accent %q is not one of %s", where, t.Accent, strings.Join(Accents, ", ")))
 		}
 		if !slices.Equal(t.OS, []string{"darwin"}) {
 			errs = append(errs, fmt.Errorf("%s: provider desktop drives macOS only; set os: [darwin]", where))
@@ -268,6 +277,7 @@ func (t Target) validateFields(where string) []error {
 	if t.Provider != "desktop" {
 		unused("wallpaper", t.Wallpaper != "")
 		unused("screensaver", t.Screensaver != "")
+		unused("accent", t.Accent != "")
 	}
 	return errs
 }

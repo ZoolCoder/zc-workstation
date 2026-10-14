@@ -57,7 +57,7 @@ var appKinds = []string{"cask", "mas", "winget"}
 
 // notTools are the item kinds that are neither an application nor a
 // command-line package.
-var notTools = []string{"tap", "script", "file", "wallpaper", "screensaver"}
+var notTools = []string{"tap", "script", "file", "wallpaper", "screensaver", "accent"}
 
 func (s *Server) inventory(w http.ResponseWriter, r *http.Request) {
 	p := inventoryPage{chrome: s.chrome(r, "inventory")}

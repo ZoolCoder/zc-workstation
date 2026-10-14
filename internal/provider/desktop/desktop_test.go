@@ -50,12 +50,22 @@ func setup(t *testing.T, saver bool) machine {
 			t.Fatal(err)
 		}
 	}
+	tg.Accent = "blue"
 	readSS := sh.Line("plutil", "-extract", defaultURLKey, "raw", "-o", "-", filepath.Join(saverDir, "Contents/Info.plist"))
+	p := Provider{home: home, system: filepath.Join(root, "system")}
 	r := &sh.Fake{Out: map[string]string{
-		sh.Line("osascript", "-e", pictures): "/System/Library/Desktop Pictures/Sky.heic\n" + tg.Wallpaper + "\n",
-		readSS:                               "http://www.google.com/\n",
+		store(p, "read", tg.Wallpaper): "1 3\n",
+		readSS:                         "http://www.google.com/\n",
+		sh.Line("defaults", "read", "-g", "AppleAccentColor"): "5\n",
+		store(p, "write", tg.Wallpaper):                       "1 3\n",
 	}}
-	return machine{Provider{r: r, home: home, system: filepath.Join(root, "system")}, r, tg, saverDir, readSS}
+	p.r = r
+	return machine{p, r, tg, saverDir, readSS}
+}
+
+// store is the store.js command line for mode and picture.
+func store(p Provider, mode, picture string) string {
+	return sh.Line("osascript", "-l", "JavaScript", "-e", storeJS, mode, p.store(), fileURL(picture))
 }
 
 // page is what the saver should hold for setup's page: the page as a data URL,
@@ -69,7 +79,7 @@ func TestPlanSetsWallpaperAndPointsTheSaver(t *testing.T) {
 	m := setup(t, true)
 	ctx := context.Background()
 	actions, err := m.p.Plan(ctx, m.t)
-	if err != nil || len(actions) != 2 {
+	if err != nil || len(actions) != 3 {
 		t.Fatalf("plan %+v %v", actions, err)
 	}
 	for _, a := range actions {
@@ -82,8 +92,11 @@ func TestPlanSetsWallpaperAndPointsTheSaver(t *testing.T) {
 	}
 	want := []string{
 		sh.Line("osascript", "-e", "on run argv", "-e", `tell application "System Events" to set picture of every desktop to POSIX file (item 1 of argv)`, "-e", "end run", m.t.Wallpaper),
+		sh.Line("killall", "WallpaperAgent"),
 		sh.Line("plutil", "-replace", defaultURLKey, "-string", page(), filepath.Join(m.saver, "Contents/Info.plist")),
 		sh.Line("codesign", "--force", "--sign", "-", m.saver),
+		sh.Line("defaults", "write", "-g", "AppleAccentColor", "-int", "4"),
+		sh.Line("defaults", "write", "-g", "AppleHighlightColor", "-string", "0.698039 0.843137 1.000000 Blue"),
 	}
 	if strings.Join(m.r.Ran, "\n") != strings.Join(want, "\n") {
 		t.Fatalf("ran\n%s", strings.Join(m.r.Ran, "\n"))
@@ -92,14 +105,15 @@ func TestPlanSetsWallpaperAndPointsTheSaver(t *testing.T) {
 
 func TestInPlaceWhenEveryDesktopAndTheSaverMatch(t *testing.T) {
 	m := setup(t, true)
-	m.r.Out[sh.Line("osascript", "-e", pictures)] = m.t.Wallpaper + "\n" + m.t.Wallpaper + "\n"
+	m.r.Out[store(m.p, "read", m.t.Wallpaper)] = "3 3\n"
 	m.r.Out[m.readSS] = page() + "\n"
+	m.r.Out[sh.Line("defaults", "read", "-g", "AppleAccentColor")] = "4\n"
 	ctx := context.Background()
 	if actions, err := m.p.Plan(ctx, m.t); err != nil || len(actions) != 0 {
 		t.Fatalf("plan %+v %v", actions, err)
 	}
 	live, err := m.p.Measure(ctx, m.t)
-	if err != nil || live.InPlace != 2 || live.Declared != 2 || live.Summary != "wallpaper in place, screensaver in place" {
+	if err != nil || live.InPlace != 3 || live.Declared != 3 || live.Summary != "wallpaper in place, screensaver in place, accent in place" {
 		t.Fatalf("live %+v %v", live, err)
 	}
 }
@@ -107,6 +121,7 @@ func TestInPlaceWhenEveryDesktopAndTheSaverMatch(t *testing.T) {
 func TestMissingSaverOrFilesAreManual(t *testing.T) {
 	m := setup(t, false)
 	_ = os.Remove(m.t.Wallpaper)
+	m.t.Accent = ""
 	actions, err := m.p.Plan(context.Background(), m.t)
 	if err != nil || len(actions) != 2 {
 		t.Fatalf("plan %+v %v", actions, err)
@@ -126,6 +141,7 @@ func TestSystemWideSaverCounts(t *testing.T) {
 		t.Fatal(err)
 	}
 	m.r.Out[sh.Line("plutil", "-extract", defaultURLKey, "raw", "-o", "-", filepath.Join(saver, "Contents/Info.plist"))] = page()
+	m.t.Accent = ""
 	items, err := m.p.Items(context.Background(), m.t)
 	if err != nil || len(items) != 2 || items[1].Kind != "screensaver" || items[1].State != "in place" {
 		t.Fatalf("items %+v %v", items, err)
@@ -134,12 +150,12 @@ func TestSystemWideSaverCounts(t *testing.T) {
 
 func TestOnlyTheKeysSetAreRead(t *testing.T) {
 	m := setup(t, true)
-	m.t.Screensaver = ""
+	m.t.Screensaver, m.t.Accent = "", ""
 	items, err := m.p.Items(context.Background(), m.t)
 	if err != nil || len(items) != 1 || items[0].Kind != "wallpaper" {
 		t.Fatalf("items %+v %v", items, err)
 	}
-	if progs := m.p.Programs(m.t); strings.Join(progs, " ") != "osascript" {
+	if progs := m.p.Programs(m.t); strings.Join(progs, " ") != "osascript killall" {
 		t.Fatalf("programs %v", progs)
 	}
 }

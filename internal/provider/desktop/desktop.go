@@ -1,15 +1,21 @@
-// Package desktop sets the macOS desktop picture and the page the
-// WebViewScreenSaver screen saver shows. System Events sets the picture. The
-// page goes into the saver's own Info.plist as its default address, because
-// macOS keeps the saver's preferences in a container no terminal may open, and
-// the sandboxed saver cannot read files outside its bundle.
+// Package desktop sets how a Mac looks: the desktop picture, the page the
+// WebViewScreenSaver screen saver shows, and the accent colour.
+//
+// The picture lives in the wallpaper store, where every Space on every display
+// keeps its own; System Events reaches only the Spaces in view, so store.js
+// reads and rewrites the store itself. The page goes into the saver's own
+// Info.plist as its default address, because macOS keeps the saver's
+// preferences in a container no terminal may open, and the sandboxed saver
+// cannot read files outside its bundle.
 package desktop
 
 import (
 	"context"
+	_ "embed"
 	"encoding/base64"
 	"fmt"
 	"mime"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -29,6 +35,22 @@ const Saver = "WebViewScreenSaver.saver"
 // its own list of pages is empty.
 const defaultURLKey = "WVSSDefaultAddressURL"
 
+//go:embed store.js
+var storeJS string
+
+// accents are the AppleAccentColor number and AppleHighlightColor value of
+// each accent colour, as System Settings writes them.
+var accents = map[string][2]string{
+	"red":      {"0", "1.000000 0.733333 0.721569 Red"},
+	"orange":   {"1", "1.000000 0.874510 0.701961 Orange"},
+	"yellow":   {"2", "1.000000 0.937255 0.690196 Yellow"},
+	"green":    {"3", "0.752941 0.964706 0.678431 Green"},
+	"blue":     {"4", "0.698039 0.843137 1.000000 Blue"},
+	"purple":   {"5", "0.968627 0.831373 1.000000 Purple"},
+	"pink":     {"6", "1.000000 0.749020 0.823529 Pink"},
+	"graphite": {"-1", "0.847059 0.847059 0.862745 Graphite"},
+}
+
 type Provider struct {
 	r sh.Runner
 	// home holds Library; Saver may also sit in system, the shared Library.
@@ -42,7 +64,7 @@ func New(r sh.Runner) Provider {
 
 // look is what the machine shows now, for each key the target sets.
 type look struct {
-	wallpaper, screensaver state
+	wallpaper, screensaver, accent state
 	// saver is the installed saver bundle, and page the page as a data URL,
 	// when the screensaver key is set.
 	saver, page string
@@ -74,28 +96,38 @@ func (p Provider) read(ctx context.Context, t config.Target) (look, error) {
 		}
 		l.screensaver, l.saver, l.page = s, saver, page
 	}
+	if t.Accent != "" {
+		l.accent = p.readAccent(ctx, t.Accent)
+	}
 	return l, nil
 }
 
-// pictures lists every desktop's picture, one path per line.
-const pictures = `set AppleScript's text item delimiters to linefeed
-tell application "System Events" to set p to picture of every desktop
-return p as text`
+func (p Provider) store() string {
+	return filepath.Join(p.home, "Library/Application Support/com.apple.wallpaper/Store/Index.plist")
+}
+
+func fileURL(path string) string { return (&url.URL{Scheme: "file", Path: path}).String() }
+
+func (p Provider) runStore(ctx context.Context, mode, picture string) ([]byte, error) {
+	return p.r.Output(ctx, "osascript", "-l", "JavaScript", "-e", storeJS, mode, p.store(), fileURL(picture))
+}
 
 func (p Provider) readWallpaper(ctx context.Context, want string) (state, error) {
 	if _, err := os.Stat(want); err != nil {
 		return state{set: true, state: provider.Missing, detail: "no picture at " + want + "; render it first"}, nil
 	}
-	out, err := p.r.Output(ctx, "osascript", "-e", pictures)
+	out, err := p.runStore(ctx, "read", want)
 	if err != nil {
 		return state{}, fmt.Errorf("read desktop pictures: %w", err)
 	}
-	for line := range strings.Lines(string(out)) {
-		if line = strings.TrimSpace(line); line != "" && filepath.Clean(line) != want {
-			return state{set: true, state: provider.Differs, detail: "a desktop shows " + filepath.Base(line)}, nil
-		}
+	var shows, spaces int
+	if _, err := fmt.Sscan(string(out), &shows, &spaces); err != nil {
+		return state{}, fmt.Errorf("read desktop pictures: %q", out)
 	}
-	return state{set: true, state: provider.InPlace, detail: "on every desktop"}, nil
+	if spaces > 0 && shows == spaces {
+		return state{set: true, state: provider.InPlace, detail: fmt.Sprintf("on every desktop, %d Spaces", spaces)}, nil
+	}
+	return state{set: true, state: provider.Differs, detail: fmt.Sprintf("%d of %d Spaces show another picture", spaces-shows, spaces)}, nil
 }
 
 func (p Provider) readScreensaver(ctx context.Context, path string) (state, string, string, error) {
@@ -117,6 +149,15 @@ func (p Provider) readScreensaver(ctx context.Context, path string) (state, stri
 		return state{set: true, state: provider.InPlace, detail: "WebViewScreenSaver shows it"}, saver, page, nil
 	}
 	return state{set: true, state: provider.Differs, detail: "WebViewScreenSaver shows another page"}, saver, page, nil
+}
+
+// readAccent compares the accent number; with none set, macOS shows multicolour.
+func (p Provider) readAccent(ctx context.Context, want string) state {
+	out, err := p.r.Output(ctx, "defaults", "read", "-g", "AppleAccentColor")
+	if err == nil && strings.TrimSpace(string(out)) == accents[want][0] {
+		return state{set: true, state: provider.InPlace, detail: "macOS accent is " + want}
+	}
+	return state{set: true, state: provider.Differs, detail: "macOS shows another accent colour"}
 }
 
 func infoPlist(saver string) string { return filepath.Join(saver, "Contents/Info.plist") }
@@ -180,11 +221,20 @@ func (p Provider) Plan(ctx context.Context, t config.Target) ([]plan.Action, err
 		actions = append(actions, manual(t, "wallpaper", l.wallpaper))
 	case provider.Differs:
 		actions = append(actions, plan.Action{Op: plan.OpUpdate, Target: t.Name, Resource: "wallpaper",
-			Detail: "set " + filepath.Base(t.Wallpaper) + " on every desktop",
+			Detail: "set " + filepath.Base(t.Wallpaper) + " on every desktop and Space",
 			Do: func(ctx context.Context) error {
-				return p.r.Run(ctx, "osascript", "-e", "on run argv",
+				// System Events records the Spaces in view, so a new Mac's store
+				// has them; the store rewrite then reaches every other Space.
+				if err := p.r.Run(ctx, "osascript", "-e", "on run argv",
 					"-e", `tell application "System Events" to set picture of every desktop to POSIX file (item 1 of argv)`,
-					"-e", "end run", t.Wallpaper)
+					"-e", "end run", t.Wallpaper); err != nil {
+					return err
+				}
+				if _, err := p.runStore(ctx, "write", t.Wallpaper); err != nil {
+					return err
+				}
+				// The agent draws from the store only when it starts.
+				return p.r.Run(ctx, "killall", "WallpaperAgent")
 			}})
 	}
 	switch l.screensaver.state {
@@ -199,6 +249,17 @@ func (p Provider) Plan(ctx context.Context, t config.Target) ([]plan.Action, err
 				}
 				// Editing Info.plist breaks the bundle's seal; sign it again, ad hoc as built.
 				return p.r.Run(ctx, "codesign", "--force", "--sign", "-", l.saver)
+			}})
+	}
+	if l.accent.state == provider.Differs {
+		a := accents[t.Accent]
+		actions = append(actions, plan.Action{Op: plan.OpUpdate, Target: t.Name, Resource: "accent",
+			Detail: "set the macOS accent colour to " + t.Accent + "; apps show it once they restart",
+			Do: func(ctx context.Context) error {
+				if err := p.r.Run(ctx, "defaults", "write", "-g", "AppleAccentColor", "-int", a[0]); err != nil {
+					return err
+				}
+				return p.r.Run(ctx, "defaults", "write", "-g", "AppleHighlightColor", "-string", a[1])
 			}})
 	}
 	return actions, nil
@@ -233,7 +294,8 @@ func (p Provider) Status(ctx context.Context, t config.Target) (string, error) {
 	return live.Summary, err
 }
 
-// Items is the wallpaper and the screen saver page, as the target sets them.
+// Items is the wallpaper, the screen saver page and the accent colour, as the
+// target sets them.
 func (p Provider) Items(ctx context.Context, t config.Target) ([]provider.Item, error) {
 	l, err := p.read(ctx, t)
 	if err != nil {
@@ -247,16 +309,22 @@ func (p Provider) Items(ctx context.Context, t config.Target) ([]provider.Item, 
 		items = append(items, provider.Item{Name: filepath.Base(t.Screensaver), Kind: "screensaver", State: l.screensaver.state,
 			App: "WebViewScreenSaver", Desc: l.screensaver.detail})
 	}
+	if l.accent.set {
+		items = append(items, provider.Item{Name: t.Accent, Kind: "accent", State: l.accent.state, Desc: l.accent.detail})
+	}
 	return items, nil
 }
 
 func (Provider) Programs(t config.Target) []string {
 	var progs []string
 	if t.Wallpaper != "" {
-		progs = append(progs, "osascript")
+		progs = append(progs, "osascript", "killall")
 	}
 	if t.Screensaver != "" {
 		progs = append(progs, "plutil", "codesign")
+	}
+	if t.Accent != "" {
+		progs = append(progs, "defaults")
 	}
 	return progs
 }

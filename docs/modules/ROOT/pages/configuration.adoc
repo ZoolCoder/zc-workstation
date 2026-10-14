@@ -55,7 +55,8 @@ targets:
 | `tools` | `file` | Required. The mise config file whose tools to install.
 | | `upgrade` | Also plan an `UPDATE` for each runtime with a newer version that its request allows. Off by default.
 | `desktop` | `wallpaper` | The picture to show on every desktop.
-| | `screensaver` | The web page for WebViewScreenSaver to show. Set this, `wallpaper`, or both. The target needs `os: [darwin]`.
+| | `screensaver` | The web page for WebViewScreenSaver to show. Set this, `wallpaper`, `accent`, or any of them. The target needs `os: [darwin]`.
+| | `accent` | The macOS accent colour: `blue`, `purple`, `pink`, `red`, `orange`, `yellow`, `green` or `graphite`.
 | `localdir` | `path` | Required. The directory to keep.
 | | `files` | File name to content. Names must stay inside `path`.
 | | `prune` | Also delete files in `path` the config does not list.
