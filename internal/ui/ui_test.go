@@ -157,15 +157,19 @@ func TestInventoryGroupsItems(t *testing.T) {
 			{Name: ".zprofile", Kind: "dotfile", State: engine.Differs, App: "zsh"},
 			{Name: ".gitconfig", Kind: "dotfile", State: engine.InPlace, App: "git"},
 		}},
+		{Target: "more", Items: []engine.Item{
+			{Name: "tmux", Kind: "brew", State: engine.Outdated, Latest: "3.8"},
+			{Name: "jq", Kind: "brew", State: engine.Extra},
+		}},
 		{Target: "apt", Skipped: true},
 	})
-	if p.Tools != (group{1, 1}) || p.Desktop != (group{0, 1}) || p.Dotfiles != (group{2, 3}) || p.Behind != 2 {
+	if p.Tools != (group{2, 2}) || p.Desktop != (group{0, 1}) || p.Dotfiles != (group{2, 3}) || p.Behind != 2 || p.Outdated != 1 || p.Extra != 1 {
 		t.Fatalf("groups %+v %+v %+v behind %d", p.Tools, p.Desktop, p.Dotfiles, p.Behind)
 	}
 	if len(p.Apps) != 2 || p.Apps[0] != (configured{"git", 1, 0}) || p.Apps[1] != (configured{"zsh", 2, 1}) {
 		t.Fatalf("apps %+v", p.Apps)
 	}
-	if len(p.Unread) != 1 || len(p.Rows) != 6 {
+	if len(p.Unread) != 1 || len(p.Rows) != 8 {
 		t.Fatalf("unread %d rows %d", len(p.Unread), len(p.Rows))
 	}
 }

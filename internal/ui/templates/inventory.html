@@ -20,9 +20,12 @@
 </section>
 
 <section class="panel">
-  <div class="panel-h"><h2>{{$.T "Everything declared"}}</h2><span class="n" id="inv-shown">{{len .Rows}}</span>{{if .Behind}}<a class="act" href="?q=missing">{{.Behind}} {{$.T "not in place"}}</a>{{end}}</div>
+  <div class="panel-h"><h2>{{$.T "Everything"}}</h2><span class="n" id="inv-shown">{{len .Rows}}</span><span class="act muted">{{$.T "declared items, then what is installed but not declared"}}</span></div>
   <div class="filters">
     <label class="search"><span class="sr-only">{{$.T "Search"}}</span><input id="inv-q" type="search" placeholder="{{$.T "Search name, kind, state, app…"}}" autocomplete="off"><kbd>/</kbd></label>
+    {{if .Behind}}<a class="chip warn" href="?q=missing"><i></i>{{.Behind}} {{$.T "not in place"}}</a> {{end}}
+    {{if .Outdated}}<a class="chip violet" href="?q=outdated"><i></i>{{.Outdated}} {{$.T "outdated"}}</a> {{end}}
+    {{if .Extra}}<a class="chip plain" href="?q=not+declared"><i></i>{{.Extra}} {{$.T "not declared"}}</a> {{end}}
     {{range .Unread}}{{if .Skipped}}<span class="chip zero" title="{{$.T "not for this system"}}">{{.Target}} {{$.T "skipped"}}</span> {{end}}{{end}}
     <button class="btn sm" type="button" id="inv-csv">{{icon "download"}}{{$.T "CSV"}}</button>
   </div>
@@ -41,7 +44,7 @@
       <td><span class="chip plain">{{.Kind}}</span></td>
       <td class="mono">{{if .Homepage}}<a href="{{.Homepage}}" rel="noopener noreferrer" target="_blank">{{.Name}}</a>{{else}}{{.Name}}{{end}}</td>
       <td><span class="chip {{stateChip .State}}"><i></i>{{.State}}</span></td>
-      <td class="mono">{{.Version}}</td>
+      <td class="mono">{{.Version}}{{if .Latest}} <span class="muted">→</span> {{.Latest}}{{end}}</td>
       <td>{{.App}}</td>
       <td class="wrap muted">{{.Desc}}</td>
     </tr>{{end}}</tbody>

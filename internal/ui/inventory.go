@@ -16,7 +16,7 @@ type itemRow struct {
 
 // Search is what the table's search box matches against.
 func (r itemRow) Search() string {
-	return strings.ToLower(strings.Join([]string{r.Target, r.Kind, r.Name, r.State, r.Version, r.App, r.Desc}, " "))
+	return strings.ToLower(strings.Join([]string{r.Target, r.Kind, r.Name, r.State, r.Version, r.Latest, r.App, r.Desc}, " "))
 }
 
 // configured is one program the dotfiles configure.
@@ -30,10 +30,13 @@ type group struct{ InPlace, Total int }
 
 func (g *group) add(i engine.Item) {
 	g.Total++
-	if i.State == engine.InPlace {
+	if installed(i) {
 		g.InPlace++
 	}
 }
+
+// installed is in place, whether or not a newer version exists.
+func installed(i engine.Item) bool { return i.State == engine.InPlace || i.State == engine.Outdated }
 
 type inventoryPage struct {
 	chrome
@@ -44,7 +47,9 @@ type inventoryPage struct {
 	Apps   []configured
 	// Tools are command-line packages, Desktop are applications.
 	Tools, Desktop, Dotfiles, Runtimes group
-	Behind                             int
+	// Behind is declared items not in place; Outdated have an update, and
+	// Extra are installed but declared by no target.
+	Behind, Outdated, Extra int
 }
 
 // appKinds are the package kinds that install desktop applications.
@@ -71,7 +76,14 @@ func (p *inventoryPage) fill(targets []engine.TargetItems) {
 		}
 		for _, i := range t.Items {
 			p.Rows = append(p.Rows, itemRow{Item: i, Target: t.Target})
-			if i.State != engine.InPlace {
+			switch i.State {
+			case engine.Extra:
+				p.Extra++
+				continue
+			case engine.Outdated:
+				p.Outdated++
+			case engine.InPlace:
+			default:
 				p.Behind++
 			}
 			switch {
@@ -83,7 +95,7 @@ func (p *inventoryPage) fill(targets []engine.TargetItems) {
 					apps[i.App] = a
 				}
 				a.Files++
-				if i.State != engine.InPlace {
+				if !installed(i) {
 					a.Behind++
 				}
 			case i.Kind == "runtime":
@@ -109,6 +121,10 @@ func stateChip(state string) string {
 		return "warn"
 	case engine.Differs:
 		return "bad"
+	case engine.Outdated:
+		return "violet"
+	case engine.Extra:
+		return "plain"
 	}
-	return "violet"
+	return "zero"
 }

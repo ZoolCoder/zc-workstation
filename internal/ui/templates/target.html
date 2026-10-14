@@ -66,7 +66,7 @@
       <td><span class="chip plain">{{.Kind}}</span></td>
       <td class="mono">{{if .Homepage}}<a href="{{.Homepage}}" rel="noopener noreferrer" target="_blank">{{.Name}}</a>{{else}}{{.Name}}{{end}}</td>
       <td><span class="chip {{stateChip .State}}"><i></i>{{.State}}</span></td>
-      <td class="mono">{{.Version}}</td>
+      <td class="mono">{{.Version}}{{if .Latest}} <span class="muted">→</span> {{.Latest}}{{end}}</td>
       <td>{{.App}}</td>
       <td class="wrap muted">{{.Desc}}</td>
     </tr>{{end}}</tbody>
