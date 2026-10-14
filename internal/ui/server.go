@@ -19,6 +19,7 @@ import (
 	"github.com/zoolcoder/zc-workstation/internal/config"
 	"github.com/zoolcoder/zc-workstation/internal/engine"
 	"github.com/zoolcoder/zc-workstation/internal/plan"
+	"github.com/zoolcoder/zc-workstation/internal/sh"
 )
 
 //go:embed templates/*.html
@@ -39,6 +40,8 @@ type Deps struct {
 	Providers engine.Providers
 	// Host is the address the page is served on, shown in the sidebar.
 	Host string
+	// Has reports whether a program is on PATH; swapped in tests.
+	Has func(name string) bool
 	// Now is swapped in tests.
 	Now func() time.Time
 }
@@ -67,6 +70,9 @@ func New(deps Deps) (*Server, error) {
 	if deps.Now == nil {
 		deps.Now = time.Now
 	}
+	if deps.Has == nil {
+		deps.Has = sh.Exec{}.Has
+	}
 	s := &Server{deps: deps, mux: http.NewServeMux(), runs: map[string]run{}}
 	s.shell = toolshell.New(toolshell.Config{
 		Brand:  toolshell.Brand{Name: deps.Name, Tagline: "local admin"},
@@ -78,8 +84,16 @@ func New(deps Deps) (*Server, error) {
 		},
 	})
 	tmpl, err := s.shell.Templates(assets, "templates/*.html", template.FuncMap{
-		"opChip": opChip,
-		"stamp":  func(at time.Time) string { return at.Local().Format("2006-01-02 15:04:05") },
+		"opChip":    opChip,
+		"stateChip": stateChip,
+		// sub is a minus b minus c..., for counts the page derives.
+		"sub": func(a int, b ...int) int {
+			for _, n := range b {
+				a -= n
+			}
+			return a
+		},
+		"stamp": func(at time.Time) string { return at.Local().Format("2006-01-02 15:04:05") },
 	})
 	if err != nil {
 		return nil, err
@@ -87,7 +101,8 @@ func New(deps Deps) (*Server, error) {
 	s.tmpl = tmpl
 	s.shell.Mount(s.mux)
 
-	s.mux.HandleFunc("GET /{$}", s.targets)
+	s.mux.HandleFunc("GET /{$}", s.dashboard)
+	s.mux.HandleFunc("GET /inventory", s.inventory)
 	s.mux.HandleFunc("GET /targets/{name}", s.target)
 	s.mux.HandleFunc("POST /targets/{name}/plan", s.plan)
 	s.mux.HandleFunc("POST /targets/{name}/apply", s.apply)
@@ -108,7 +123,8 @@ func (s *Server) chrome(r *http.Request, active string) chrome {
 	}
 	c := s.shell.Chrome(r, active, []toolshell.NavGroup{
 		{Items: []toolshell.NavItem{
-			{Href: "/", Label: "Targets", Key: "targets", Icon: "grid", Count: n, Hotkey: "h"},
+			{Href: "/", Label: "Dashboard", Key: "dashboard", Icon: "grid", Count: n, Hotkey: "h"},
+			{Href: "/inventory", Label: "Inventory", Key: "inventory", Icon: "list", Hotkey: "i"},
 		}},
 		{Title: "System", Items: []toolshell.NavItem{
 			{Href: "/activity", Label: "Activity", Key: "activity", Icon: "pulse", Hotkey: "l"},

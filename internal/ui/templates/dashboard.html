@@ -1,0 +1,71 @@
+{{template "ts-top" .}}
+<div class="top">
+  <div><h1 class="pg">{{$.T "This machine"}}</h1><p class="sub">{{.System}} · {{$.T "what the config declares, and what is in place right now"}}</p></div>
+</div>
+{{if .ConfigErr}}<p class="callout bad"><b>{{$.T "config"}}</b> <span class="err">{{.ConfigErr}}</span></p>{{else}}
+
+{{if .Errors}}
+<section class="next bad" aria-label="{{$.T "Next step"}}">
+  <span class="ic">{{icon "alert"}}</span>
+  <div><div class="next-k">{{$.T "Next step"}}</div><h2>{{.Errors}} {{$.T "target(s) cannot be read"}}</h2><p>{{$.T "Open the target to see why, or run"}} <code>{{$.Bin}} doctor</code>.</p></div>
+  <div></div>
+</section>
+{{else if or .Missing .ProgramsMissing}}
+<section class="next warn" aria-label="{{$.T "Next step"}}">
+  <span class="ic">{{icon "arrow"}}</span>
+  <div><div class="next-k">{{$.T "Next step"}}</div><h2>{{.Missing}} {{$.T "item(s) to put in place"}}</h2><p>{{$.T "Review the plan, then apply it:"}} <code>{{$.Bin}} plan</code>, <code>{{$.Bin}} apply</code>.</p></div>
+  <div></div>
+</section>
+{{else}}
+<section class="next ok" aria-label="{{$.T "Next step"}}">
+  <span class="ic">{{icon "check"}}</span>
+  <div><div class="next-k">{{$.T "Next step"}}</div><h2>{{$.T "All clear"}}</h2><p>{{$.T "Everything declared for this system is in place."}}</p></div>
+  <div></div>
+</section>
+{{end}}
+
+<section class="kpis" aria-label="{{$.T "Machine health"}}">
+  <a class="kpi" href="#targets"><span class="ic">{{icon "monitor"}}</span><span class="lbl">{{$.T "Targets"}}</span><b>{{.ForHere}}</b><span class="hint">{{$.T "for this system"}}{{with .Skipped}}, {{.}} {{$.T "skipped"}}{{end}}</span></a>
+  <a class="kpi" href="#targets"><span class="ic">{{icon "check"}}</span><span class="lbl">{{$.T "In sync"}}</span><b class="{{if eq .InSync .ForHere}}ok{{else}}warn{{end}}">{{.InSync}} <small>{{$.T "of"}} {{.ForHere}}</small></b><span class="hint">{{$.T "targets with nothing missing"}}</span><span class="viz wide">{{meter "ok warn bad" (ints .InSync (sub .ForHere .InSync .Errors) .Errors)}}</span></a>
+  <a class="kpi" href="#targets"><span class="ic">{{icon "download"}}</span><span class="lbl">{{$.T "Missing"}}</span><b class="{{if .Missing}}warn{{else}}ok{{end}}">{{.Missing}} <small>{{$.T "of"}} {{.Declared}}</small></b><span class="hint">{{$.T "declared items not in place"}}</span><span class="viz wide">{{meter "ok warn" (ints .InPlace .Missing)}}</span></a>
+  <a class="kpi" href="#programs"><span class="ic">{{icon "terminal"}}</span><span class="lbl">{{$.T "Programs"}}</span><b class="{{if .ProgramsMissing}}bad{{else}}ok{{end}}">{{sub (len .Programs) .ProgramsMissing}} <small>{{$.T "of"}} {{len .Programs}}</small></b><span class="hint">{{$.T "managers and tools on PATH"}}</span></a>
+</section>
+
+<div class="grid-2">
+  <section class="panel">
+    <div class="panel-h"><h2>{{$.T "Coverage"}}</h2><span class="n">{{.Coverage}}%</span></div>
+    <p class="sr-only">{{.InPlace}} {{$.T "of"}} {{.Declared}} {{$.T "declared items in place"}}.</p>
+    <div class="chart">
+      <div class="dial sm" aria-hidden="true">{{donut "ok warn" (ints .InPlace .Missing)}}<div class="c"><b>{{.Coverage}}%</b><small>{{$.T "in place"}}</small></div></div>
+      <ul class="legend"><li class="ok"><i></i><b>{{.InPlace}}</b> {{$.T "in place"}}</li><li class="warn"><i></i><b>{{.Missing}}</b> {{$.T "missing"}}</li><li><i></i><b>{{.Declared}}</b> {{$.T "declared"}}</li></ul>
+    </div>
+  </section>
+  <section class="panel" id="programs">
+    <div class="panel-h"><h2>{{$.T "Programs"}}</h2><span class="act muted">{{$.T "what the targets drive"}}</span></div>
+    {{if .Programs}}<div class="tw"><table>
+      <tbody>{{range .Programs}}<tr><td><code>{{.Name}}</code></td><td>{{if .Found}}<span class="chip on">{{$.T "on PATH"}}</span>{{else}}<span class="chip bad">{{$.T "missing"}}</span>{{end}}</td></tr>{{end}}</tbody>
+    </table></div>{{else}}<p class="empty">{{$.T "no target here runs another program"}}</p>{{end}}
+  </section>
+</div>
+{{end}}
+
+<section class="panel" id="targets">
+  <div class="panel-h"><h2>{{$.T "Targets"}}</h2><span class="n">{{len .Rows}}</span></div>
+  <div class="tw"><table>
+    <thead><tr><th>{{$.T "Target"}}</th><th>{{$.T "Provider"}}</th><th>{{$.T "In place"}}</th><th>{{$.T "Live"}}</th><th>{{$.T "Last plan"}}</th></tr></thead>
+    <tbody>
+    {{range .Rows}}
+      <tr>
+        <td><a class="name" href="/targets/{{.Name}}">{{.Name}}</a></td>
+        <td><span class="chip plain">{{.Provider}}</span>{{range .OS}} <span class="chip zero">{{.}}</span>{{end}}</td>
+        <td>{{if .Status.Skipped}}<span class="chip zero">{{$.T "skipped"}}</span>{{else if .Status.Declared}}<span class="viz">{{meter "ok warn" (ints .Status.InPlace .Missing)}}</span>{{else}}<span class="muted">·</span>{{end}}</td>
+        <td class="wrap">{{if .Status.Error}}<span class="err">{{.Status.Error}}</span>{{else}}<span class="muted">{{.Status.Summary}}</span>{{end}}</td>
+        <td>{{if .Status.Skipped}}<span class="muted">·</span>{{else}}{{with .Last}}{{if .Err}}<span class="chip bad">{{$.T "failed"}}</span>{{else if .Plan.Empty}}<span class="chip on">{{$.T "in sync"}}</span>{{else}}<span class="chip warn">{{len .Plan.Actions}} {{$.T "changes"}}</span>{{end}}{{else}}<span class="muted">{{$.T "not planned yet"}}</span>{{end}}{{end}}</td>
+      </tr>
+    {{else}}
+      <tr><td colspan="5" class="empty">{{$.T "the config declares no targets"}}</td></tr>
+    {{end}}
+    </tbody>
+  </table></div>
+</section>
+{{template "ts-bottom" .}}

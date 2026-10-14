@@ -1,7 +1,7 @@
 {{template "ts-top" .}}
-<nav class="crumb" aria-label="{{$.T "Breadcrumb"}}"><a href="/">{{$.T "Targets"}}</a> / {{.Name}}</nav>
+<nav class="crumb" aria-label="{{$.T "Breadcrumb"}}"><a href="/">{{$.T "Dashboard"}}</a> / {{.Name}}</nav>
 <div class="top">
-  <div><h1 class="pg">{{.Name}}</h1><p class="sub"><span class="chip plain">{{.Provider}}</span> <code>{{.Path}}</code></p></div>
+  <div><h1 class="pg">{{.Name}}</h1><p class="sub"><span class="chip plain">{{.Provider}}</span>{{range .OS}} <span class="chip zero">{{.}}</span>{{end}} <code>{{.Where}}</code></p></div>
   <div class="acts">
     <form method="post" action="/targets/{{.Name}}/plan" data-busy="{{$.T "Planning…"}}"><button class="btn primary" type="submit" title="{{$.T "reads live state; changes nothing"}}">{{icon "play"}}{{$.T "Plan"}}</button></form>
   </div>
@@ -10,7 +10,7 @@
 <div class="grid-2">
   <section class="panel">
     <div class="panel-h"><h2>{{$.T "Live status"}}</h2><span class="act muted">{{$.T "read just now, no diffing"}}</span></div>
-    {{if .Live.Error}}<p class="callout bad"><span class="err">{{.Live.Error}}</span></p>{{else}}<p class="muted">{{.Live.Summary}}</p>{{end}}
+    {{if .Live.Error}}<p class="callout bad"><span class="err">{{.Live.Error}}</span></p>{{else}}<p class="muted">{{.Live.Summary}}</p>{{if .Live.Declared}}<p class="viz wide">{{meter "ok warn" (ints .Live.InPlace (sub .Live.Declared .Live.InPlace))}}</p>{{end}}{{end}}
   </section>
 
   <section class="panel apply">
@@ -48,6 +48,32 @@
     <p class="empty">{{$.TH "press %s to read the live state and list what differs" (strong ($.T "Plan"))}}</p>
   {{end}}
 </section>
+
+{{if .Items}}
+<section class="panel">
+  <div class="panel-h"><h2>{{$.T "Items"}}</h2><span class="n" id="items-shown">{{len .Items}}</span><span class="act muted">{{$.T "what this target declares, read just now"}}</span></div>
+  <div class="filters"><label class="search"><span class="sr-only">{{$.T "Search"}}</span><input id="items-q" type="search" placeholder="{{$.T "Search name, state, app…"}}" autocomplete="off"><kbd>/</kbd></label></div>
+  <div class="tw"><table data-table data-search-input="#items-q" data-shown="#items-shown" data-per-page="50" data-pager="#items-pager">
+    <thead><tr>
+      <th data-sort="kind"><button type="button">{{$.T "Kind"}}</button></th>
+      <th data-sort="name"><button type="button">{{$.T "Name"}}</button></th>
+      <th data-sort="state"><button type="button">{{$.T "State"}}</button></th>
+      <th>{{$.T "Version"}}</th>
+      <th data-sort="app"><button type="button">{{$.T "App"}}</button></th>
+      <th>{{$.T "About"}}</th>
+    </tr></thead>
+    <tbody>{{range .Items}}<tr data-search="{{.Search}}" data-kind="{{.Kind}}" data-name="{{.Name}}" data-state="{{.State}}" data-app="{{.App}}">
+      <td><span class="chip plain">{{.Kind}}</span></td>
+      <td class="mono">{{if .Homepage}}<a href="{{.Homepage}}" rel="noopener noreferrer" target="_blank">{{.Name}}</a>{{else}}{{.Name}}{{end}}</td>
+      <td><span class="chip {{stateChip .State}}"><i></i>{{.State}}</span></td>
+      <td class="mono">{{.Version}}</td>
+      <td>{{.App}}</td>
+      <td class="wrap muted">{{.Desc}}</td>
+    </tr>{{end}}</tbody>
+  </table></div>
+  <div class="pager" id="items-pager"></div>
+</section>
+{{end}}
 
 {{if .Run.Output}}
 <section class="panel">

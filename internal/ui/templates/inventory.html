@@ -1,0 +1,52 @@
+{{template "ts-top" .}}
+<div class="top">
+  <div><h1 class="pg">{{$.T "Inventory"}}</h1><p class="sub">{{$.T "every package, app, dotfile and runtime the config declares, read from this machine"}}</p></div>
+</div>
+{{if .ConfigErr}}<p class="callout bad"><b>{{$.T "config"}}</b> <span class="err">{{.ConfigErr}}</span></p>{{else}}
+
+<section class="kpis" aria-label="{{$.T "Inventory"}}">
+  <a class="kpi" href="?q=brew"><span class="ic">{{icon "terminal"}}</span><span class="lbl">{{$.T "Tools"}}</span><b>{{.Tools.InPlace}} <small>{{$.T "of"}} {{.Tools.Total}}</small></b><span class="hint">{{$.T "command-line packages installed"}}</span>{{if .Tools.Total}}<span class="viz wide">{{meter "ok warn" (ints .Tools.InPlace (sub .Tools.Total .Tools.InPlace))}}</span>{{end}}</a>
+  <a class="kpi" href="?q=cask"><span class="ic">{{icon "monitor"}}</span><span class="lbl">{{$.T "Apps"}}</span><b>{{.Desktop.InPlace}} <small>{{$.T "of"}} {{.Desktop.Total}}</small></b><span class="hint">{{$.T "desktop and App Store apps installed"}}</span>{{if .Desktop.Total}}<span class="viz wide">{{meter "ok warn" (ints .Desktop.InPlace (sub .Desktop.Total .Desktop.InPlace))}}</span>{{end}}</a>
+  <a class="kpi" href="#apps"><span class="ic">{{icon "edit"}}</span><span class="lbl">{{$.T "Configured"}}</span><b>{{len .Apps}}</b><span class="hint">{{.Dotfiles.InPlace}} {{$.T "of"}} {{.Dotfiles.Total}} {{$.T "dotfiles in place"}}</span>{{if .Dotfiles.Total}}<span class="viz wide">{{meter "ok warn" (ints .Dotfiles.InPlace (sub .Dotfiles.Total .Dotfiles.InPlace))}}</span>{{end}}</a>
+  <a class="kpi" href="?q=runtime"><span class="ic">{{icon "box"}}</span><span class="lbl">{{$.T "Runtimes"}}</span><b>{{.Runtimes.InPlace}} <small>{{$.T "of"}} {{.Runtimes.Total}}</small></b><span class="hint">{{$.T "language versions through mise"}}</span>{{if .Runtimes.Total}}<span class="viz wide">{{meter "ok warn" (ints .Runtimes.InPlace (sub .Runtimes.Total .Runtimes.InPlace))}}</span>{{end}}</a>
+</section>
+
+{{range .Unread}}{{if .Error}}<p class="callout bad"><b>{{.Target}}</b> <span class="err">{{.Error}}</span></p>{{end}}{{end}}
+
+<section class="panel" id="apps">
+  <div class="panel-h"><h2>{{$.T "Configured apps"}}</h2><span class="n">{{len .Apps}}</span><span class="act muted">{{$.T "programs the dotfiles configure"}}</span></div>
+  {{if .Apps}}<div class="chips-row">{{range .Apps}}<a class="chip {{if .Behind}}warn{{else}}on{{end}}" href="?q={{.App}}" title="{{.Files}} {{$.T "file(s)"}}{{if .Behind}}, {{.Behind}} {{$.T "not in place"}}{{end}}"><i></i>{{.App}} <small>{{.Files}}</small></a> {{end}}</div>
+  {{else}}<p class="empty">{{$.T "no dotfiles target is readable on this system"}}</p>{{end}}
+</section>
+
+<section class="panel">
+  <div class="panel-h"><h2>{{$.T "Everything declared"}}</h2><span class="n" id="inv-shown">{{len .Rows}}</span>{{if .Behind}}<a class="act" href="?q=missing">{{.Behind}} {{$.T "not in place"}}</a>{{end}}</div>
+  <div class="filters">
+    <label class="search"><span class="sr-only">{{$.T "Search"}}</span><input id="inv-q" type="search" placeholder="{{$.T "Search name, kind, state, app…"}}" autocomplete="off"><kbd>/</kbd></label>
+    {{range .Unread}}{{if .Skipped}}<span class="chip zero" title="{{$.T "not for this system"}}">{{.Target}} {{$.T "skipped"}}</span> {{end}}{{end}}
+    <button class="btn sm" type="button" id="inv-csv">{{icon "download"}}{{$.T "CSV"}}</button>
+  </div>
+  <div class="tw"><table data-table data-search-input="#inv-q" data-shown="#inv-shown" data-per-page="50" data-pager="#inv-pager" data-csv="inv-csv" data-csv-name="inventory.csv">
+    <thead><tr>
+      <th data-sort="target"><button type="button">{{$.T "Target"}}</button></th>
+      <th data-sort="kind"><button type="button">{{$.T "Kind"}}</button></th>
+      <th data-sort="name"><button type="button">{{$.T "Name"}}</button></th>
+      <th data-sort="state"><button type="button">{{$.T "State"}}</button></th>
+      <th>{{$.T "Version"}}</th>
+      <th data-sort="app"><button type="button">{{$.T "App"}}</button></th>
+      <th>{{$.T "About"}}</th>
+    </tr></thead>
+    <tbody>{{range .Rows}}<tr data-search="{{.Search}}" data-target="{{.Target}}" data-kind="{{.Kind}}" data-name="{{.Name}}" data-state="{{.State}}" data-app="{{.App}}">
+      <td><a href="/targets/{{.Target}}">{{.Target}}</a></td>
+      <td><span class="chip plain">{{.Kind}}</span></td>
+      <td class="mono">{{if .Homepage}}<a href="{{.Homepage}}" rel="noopener noreferrer" target="_blank">{{.Name}}</a>{{else}}{{.Name}}{{end}}</td>
+      <td><span class="chip {{stateChip .State}}"><i></i>{{.State}}</span></td>
+      <td class="mono">{{.Version}}</td>
+      <td>{{.App}}</td>
+      <td class="wrap muted">{{.Desc}}</td>
+    </tr>{{end}}</tbody>
+  </table></div>
+  <div class="pager" id="inv-pager"></div>
+</section>
+{{end}}
+{{template "ts-bottom" .}}

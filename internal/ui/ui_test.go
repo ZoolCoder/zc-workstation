@@ -12,6 +12,7 @@ import (
 
 	"github.com/zoolcoder/toolshell/activity"
 	"github.com/zoolcoder/zc-workstation/internal/engine"
+	"github.com/zoolcoder/zc-workstation/internal/sh"
 )
 
 func newPage(t *testing.T) (*Server, string) {
@@ -45,6 +46,7 @@ func TestPagesRender(t *testing.T) {
 	s, _ := newPage(t)
 	for path, want := range map[string]string{
 		"/": "notes", "/targets/notes": "press", "/activity": "nothing recorded yet", "/settings": "localdir",
+		"/inventory": `data-search="notes file a.txt missing`,
 	} {
 		w := do(s, http.MethodGet, path, nil)
 		if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), want) {
@@ -99,5 +101,71 @@ func TestApplyRefusesDeletesAndMovedState(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(dir, "a.txt")); err == nil {
 		t.Fatal("wrote after refusing")
+	}
+}
+
+func TestDashboardCountsAndSkips(t *testing.T) {
+	defer func(goos string) { engine.GOOS = goos }(engine.GOOS)
+	engine.GOOS = "linux"
+	root := t.TempDir()
+	cfg := filepath.Join(root, "tool.yaml")
+	body := `version: 1
+targets:
+  - {name: notes, provider: localdir, path: out, files: {a.txt: A, b.txt: B}}
+  - {name: winget, provider: packages, os: [windows], file: winget.json}
+  - {name: runtimes, provider: tools, file: mise.toml}
+`
+	if err := os.WriteFile(cfg, []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(root, "out"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "out", "a.txt"), []byte("A"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	s, err := New(Deps{Name: "tool", ConfigPath: cfg, Providers: engine.With(&sh.Fake{}),
+		Has: func(string) bool { return false }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	w := do(s, http.MethodGet, "/", nil)
+	page := w.Body.String()
+	for _, want := range []string{
+		"This machine", "1 target(s) cannot be read", "mise is not on PATH",
+		`<span class="chip zero">skipped</span>`, "1 <small>of 2</small>", "<code>mise</code>",
+	} {
+		if !strings.Contains(page, want) {
+			t.Errorf("dashboard lacks %q", want)
+		}
+	}
+	if w.Code != http.StatusOK {
+		t.Fatalf("status %d", w.Code)
+	}
+}
+
+func TestInventoryGroupsItems(t *testing.T) {
+	var p inventoryPage
+	p.fill([]engine.TargetItems{
+		{Target: "brew", Items: []engine.Item{
+			{Name: "git", Kind: "brew", State: engine.InPlace},
+			{Name: "ghostty", Kind: "cask", State: engine.Missing},
+			{Name: "x/tap", Kind: "tap", State: engine.InPlace},
+		}},
+		{Target: "dots", Items: []engine.Item{
+			{Name: ".zshrc", Kind: "dotfile", State: engine.InPlace, App: "zsh"},
+			{Name: ".zprofile", Kind: "dotfile", State: engine.Differs, App: "zsh"},
+			{Name: ".gitconfig", Kind: "dotfile", State: engine.InPlace, App: "git"},
+		}},
+		{Target: "apt", Skipped: true},
+	})
+	if p.Tools != (group{1, 1}) || p.Desktop != (group{0, 1}) || p.Dotfiles != (group{2, 3}) || p.Behind != 2 {
+		t.Fatalf("groups %+v %+v %+v behind %d", p.Tools, p.Desktop, p.Dotfiles, p.Behind)
+	}
+	if len(p.Apps) != 2 || p.Apps[0] != (configured{"git", 1, 0}) || p.Apps[1] != (configured{"zsh", 2, 1}) {
+		t.Fatalf("apps %+v", p.Apps)
+	}
+	if len(p.Unread) != 1 || len(p.Rows) != 6 {
+		t.Fatalf("unread %d rows %d", len(p.Unread), len(p.Rows))
 	}
 }
