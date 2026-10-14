@@ -32,5 +32,6 @@ coverage.out
 go.work
 go.work.sum
 
-# rendered wallpapers; assets/wallpaper/render.sh draws them
-/assets/wallpaper/*.png
+# 5K wallpapers; assets/wallpaper/render.sh draws them. The laptop ones are
+# committed, so the desktop provider can point at them.
+/assets/wallpaper/zc-workstation-5k-*.png
