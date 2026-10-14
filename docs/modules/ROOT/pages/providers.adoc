@@ -42,6 +42,39 @@ For `list` and the Inventory page, versions and descriptions come from
 without them. If the details cannot be read, items still list, without
 versions.
 
+Newer versions and undeclared packages come from:
+
+[cols="1,2,2,2"]
+|===
+| Manager | Newer versions | Installed on purpose | Upgrades with
+
+| `brew`
+| `brew outdated --json=v2`, skipping pinned formulae; `mas outdated`
+| `brew leaves --installed-on-request`, `brew list --cask`, `brew tap`, `mas list`
+| `brew upgrade`, `brew upgrade --cask`, `mas upgrade ID`
+
+| `apt`
+| `apt list --upgradable`
+| `apt-mark showmanual`
+| `sudo apt-get install --only-upgrade -y`
+
+| `dnf`
+| `dnf list --upgrades`
+| `dnf repoquery --userinstalled`
+| `sudo dnf upgrade -y`
+|===
+
+winget has neither yet. These reads are best effort: if one fails, items
+still list without it.
+
+* With `upgrade: true`, the plan has one `UPDATE` per outdated declared
+  package, such as `upgrade with brew, 3.7c to 3.8`. Without it, nothing is
+  upgraded. A manager that cannot report newer versions gets one `MANUAL`
+  step instead.
+* `capture` writes a Brewfile (`tap`, `brew`, `cask` and `mas` lines) or a
+  package list from the "installed on purpose" reads. Dependencies are left
+  out, since the manager pulls them in again.
+
 * Taps are installed before the formulae that need them.
 * Other Brewfile entries, such as `vscode` or `go`, are `MANUAL`: the plan
   names them, and you install them yourself.
@@ -98,7 +131,14 @@ directory's config are ignored.
   as `java@temurin-25`.
 * Apply runs `mise install` in the config's directory.
 * In the inventory, each runtime shows the version mise resolved next to the
-  one requested, such as `24.21.0` for `lts`.
+  one requested, such as `24.21.0` for `lts`, and the newer version
+  `mise outdated` reports. Versions installed but asked for by no config in
+  this target, such as a global tool or an old node, show as `not declared`.
+* With `upgrade: true`, the plan has one `UPDATE` per outdated runtime. Apply
+  runs `mise upgrade` for that `tool@request` in the config's directory, so a
+  pin such as `3.13` moves only within `3.13`.
+* `capture` writes a `[tools]` table of every installed version, using the
+  request when mise knows it.
 * mise refuses to read a config it does not trust. The plan then shows a
   `MANUAL` step: read the file, then run `mise trust`.
 

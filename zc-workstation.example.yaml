@@ -13,6 +13,7 @@ targets:
     provider: packages
     os: [darwin]
     file: example/Brewfile
+    # upgrade: true         # also upgrade what has a newer version
 
   - name: apt
     provider: packages
@@ -45,3 +46,4 @@ targets:
   - name: runtimes
     provider: tools
     file: example/mise.toml
+    # upgrade: true         # also upgrade runtimes within their pins

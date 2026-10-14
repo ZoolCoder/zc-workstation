@@ -8,7 +8,8 @@
 | `plan` | Read live state and list what would change. The default.
 | `apply [FILE]` | Make the changes, then plan again to verify. With a saved plan, exactly those.
 | `status` | What is in place per target, without diffing. Targets for another system show as skipped.
-| `list` | Every package, app, dotfile and runtime the config declares, one line each: its state, installed version, the app it configures, and a description.
+| `list` | Every package, app, dotfile and runtime the config declares, one line each: its state, installed version, the app it configures, and a description. Then what is installed but declared nowhere.
+| `capture` | Print the manifest one target would declare to match this machine. Needs `-target`.
 | `validate` | Check the config offline.
 | `doctor` | Machine health: binary, system, config, the programs targets need, and each target.
 | `ui` | The xref:ui.adoc[dashboard].
@@ -22,7 +23,10 @@
 |===
 | `-config FILE` | Config file, or `-` for standard input.
 | `-target NAME` | Limit to this target; repeat for several.
-| `-out FILE` | `plan`: save the plan for `apply FILE`.
+| `-out FILE` | `plan`: save the plan for `apply FILE`. `capture`: write the manifest to `FILE` instead of standard output.
+| `-force` | `capture -out`: overwrite `FILE` if it exists.
+| `-state LIST` | `list`: only these states, comma-separated, such as `outdated,not declared`.
+| `-kind LIST` | `list`: only these kinds, comma-separated, such as `cask,mas`.
 | `-json` | `plan`, `status`, `list` and `doctor`: machine-readable.
 | `-exit-code` | `plan`: exit 2 for changes, 3 for manual-only.
 | `-yes` | `apply`: skip the confirmation prompt for deletions.
@@ -34,18 +38,57 @@
 ----
 $ zc-workstation list
 TARGET    KIND     NAME                STATE     VERSION   APP       ABOUT
-brew      brew     starship            in place  1.26.0    -         Cross-shell prompt for astronauts
-brew      cask     ghostty             in place  1.3.1     Ghostty   Terminal emulator that uses platform UI and GPU
-brew      cask     google-chrome       missing   -         -         -
-dotfiles  dotfile  .config/ghostty/config  in place  -     ghostty   -
-runtimes  runtime  node                in place  24.21.0   -         requested lts
+brew      brew     starship            in place      1.26.0       -         Cross-shell prompt for astronauts
+brew      brew     tmux                outdated      3.7c -> 3.8  -         Terminal multiplexer
+brew      cask     ghostty             in place      1.3.1        Ghostty   Terminal emulator that uses platform UI and GPU
+brew      cask     google-chrome       missing       -            -         -
+brew      brew     jq                  not declared  1.8.1        -         Lightweight and flexible command-line JSON processor
+dotfiles  dotfile  .config/ghostty/config  in place  -            ghostty   -
+runtimes  runtime  node                in place      24.21.0      -         requested lts
 ----
 
-States are `in place`, `missing`, `differs` (a dotfile that does not match
-its source, or a script still to run) and `manual` (an entry
-`zc-workstation` does not install). Versions and descriptions come from the
-package manager; see xref:providers.adoc[Providers]. A target for another
-system is listed as skipped, one that cannot be read with its error.
+States:
+
+* `in place`: installed, and nothing newer is known.
+* `outdated`: installed, and the manager has a newer version. A pinned
+  formula never shows as outdated.
+* `missing`: declared, not installed.
+* `differs`: a dotfile that does not match its source, or a script still to
+  run.
+* `manual`: an entry `zc-workstation` does not install.
+* `not declared`: installed on purpose, but no target declares it. For brew
+  these are formulae installed on request, casks, taps and App Store apps; a
+  dependency never shows.
+
+Versions and descriptions come from the package manager; see
+xref:providers.adoc[Providers]. A target for another system is listed as
+skipped, one that cannot be read with its error. The reads run side by side,
+so a full list takes about two seconds on a Mac with a few hundred packages.
+
+[source,console]
+----
+$ zc-workstation list -state outdated
+$ zc-workstation list -state "not declared" -kind cask,mas
+----
+
+== Capture
+
+`capture` writes the manifest that would declare what the machine has: a
+Brewfile for brew, one package per line for apt and dnf, and a `[tools]`
+table for mise. Use it to start a config from a machine you already set up,
+or to see what a manifest misses.
+
+[source,console]
+----
+$ zc-workstation capture -target brew > Brewfile.new
+$ zc-workstation capture -target brew -out Brewfile.new
+captured brew to Brewfile.new
+----
+
+It writes standard output unless you pass `-out`, and it refuses to replace a
+file without `-force`. Diff the result against your manifest and copy what
+you want; a capture lists everything installed on request, including what
+you only tried once. winget has its own: `winget export -o FILE`.
 
 == Installs ask in the terminal
 

@@ -48,10 +48,12 @@ targets:
 
 | `packages` | `file` | Required. The manifest: a Brewfile, a package list, or a winget import file.
 | | `manager` | `brew`, `apt`, `dnf` or `winget`. Empty picks the system's: brew on macOS, winget on Windows, apt on Linux unless only dnf is installed.
+| | `upgrade` | Also plan an `UPDATE` for each declared package with a newer version. Off by default.
 | `dotfiles` | `source` | Required. The chezmoi source directory.
 | | `destination` | Where the files land. Empty means your home directory.
 | | `mode` | `file` copies (the default); `symlink` links back into the source.
 | `tools` | `file` | Required. The mise config file whose tools to install.
+| | `upgrade` | Also plan an `UPDATE` for each runtime with a newer version that its request allows. Off by default.
 | `localdir` | `path` | Required. The directory to keep.
 | | `files` | File name to content. Names must stay inside `path`.
 | | `prune` | Also delete files in `path` the config does not list.

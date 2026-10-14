@@ -11,7 +11,7 @@ type Provider interface {
 }
 ----
 
-Three optional interfaces feed the dashboard, `doctor` and `list`:
+Four optional interfaces feed the dashboard, `doctor`, `list` and `capture`:
 
 [source,go]
 ----
@@ -28,6 +28,11 @@ type Requirer interface {
 // Items lists every declared item, for list and the Inventory page.
 type Lister interface {
 	Items(ctx context.Context, t config.Target) ([]Item, error)
+}
+
+// Capture writes the manifest that matches this machine, for capture.
+type Capturer interface {
+	Capture(ctx context.Context, t config.Target) ([]byte, error)
 }
 ----
 

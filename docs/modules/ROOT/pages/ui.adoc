@@ -34,9 +34,15 @@ declares, read from this machine:
   place. Apps are casks, App Store apps and winget packages.
 * *Configured apps*: the programs the dotfiles configure, such as `ghostty`
   or `zsh`, with their file count. One with a file not in place shows amber.
-* *Everything declared*: one row per item with its state, version, app and
-  description. Search with `/`, sort by column, and export CSV. The name links
-  to the project's homepage when the manager knows it.
+* *Everything*: one row per declared item with its state, version, app and
+  description, then the items installed but declared nowhere. A newer version
+  shows next to the installed one. The chips above the table count what is
+  not in place, outdated and not declared; each one filters the table. Search
+  with `/`, sort by column, and export CSV. The name links to the project's
+  homepage when the manager knows it.
+
+Undeclared and outdated items do not count against the bars: a bar measures
+what the config declares.
 
 `zc-workstation list` prints the same table.
 

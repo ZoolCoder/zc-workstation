@@ -50,6 +50,8 @@ $ cp zc-workstation.example.yaml ~/.config/zc-workstation/zc-workstation.yaml
 $ zc-workstation validate
 $ zc-workstation doctor
 $ zc-workstation list      # every package, app, dotfile and runtime, with versions
+$ zc-workstation list -state outdated,"not declared"
+$ zc-workstation capture -target brew > Brewfile.new
 $ zc-workstation plan
 $ zc-workstation apply
 $ zc-workstation ui        # the dashboard, on 127.0.0.1 only

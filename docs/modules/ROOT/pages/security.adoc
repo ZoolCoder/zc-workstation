@@ -9,6 +9,10 @@
 * *Deletions need a person.* The CLI asks, the dashboard sends you to the
   terminal, and the MCP server cancels.
 * *Nothing is uninstalled.* The packages provider only installs.
+* *Nothing is upgraded unless a target asks.* `upgrade: true` is per target,
+  and each upgrade is a planned `UPDATE` you review first.
+* *Capture never replaces a file.* It writes standard output, or a new file;
+  replacing one needs `-force`.
 * *Untrusted mise configs stay untrusted.* Trusting one is a `MANUAL` step,
   never automatic.
 * *Writes stay inside a target.* `localdir` writes through `os.Root`: a
