@@ -58,6 +58,20 @@ func TestPagesRender(t *testing.T) {
 	}
 }
 
+func TestThemeLoadsOnEveryPage(t *testing.T) {
+	s, _ := newPage(t)
+	for _, path := range []string{"/", "/inventory", "/targets/notes", "/activity", "/settings", "/targets/missing", "/nope"} {
+		if w := do(s, http.MethodGet, path, nil); !strings.Contains(w.Body.String(), `href="/zc/theme.css"`) {
+			t.Errorf("%s: no theme stylesheet", path)
+		}
+	}
+	for _, path := range []string{"/zc/theme.css", "/zc/fonts/unbounded-latin-wght-normal.woff2"} {
+		if w := do(s, http.MethodGet, path, nil); w.Code != http.StatusOK {
+			t.Errorf("%s: %d", path, w.Code)
+		}
+	}
+}
+
 func TestPlanThenApplyBehindTypedName(t *testing.T) {
 	s, dir := newPage(t)
 	if w := do(s, http.MethodPost, "/targets/notes/apply", url.Values{"confirm": {"notes"}}); !strings.Contains(w.Header().Get("Location"), "err=plan+first") {

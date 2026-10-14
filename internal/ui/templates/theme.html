@@ -1,0 +1,11 @@
+{{/* zc-top is toolshell's page top plus the ZoolCoder theme, which loads
+   after toolshell's stylesheet so its tokens win. */}}
+{{define "zc-top"}}{{template "ts-top" .}}<link rel="stylesheet" href="/zc/theme.css">{{end}}
+{{define "zc-error"}}{{template "zc-top" .}}
+<section class="errpage" aria-labelledby="ts-err-h">
+  <div class="errcode" aria-hidden="true">{{.Code}}</div>
+  <h1 class="pg" id="ts-err-h">{{.Heading}}</h1>
+  {{with .Detail}}<p class="sub">{{.}}</p>{{end}}
+  <div class="acts"><a class="btn primary" href="{{.Brand.Home}}">{{icon "grid"}}{{.T "Back to home"}}</a><button class="btn" type="button" data-back><span class="back">{{icon "arrow"}}</span>{{.T "Go back"}}</button></div>
+</section>
+{{template "ts-bottom" .}}{{end}}

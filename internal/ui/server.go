@@ -9,6 +9,7 @@ import (
 	"context"
 	"embed"
 	"html/template"
+	"io/fs"
 	"net/http"
 	"os/user"
 	"sync"
@@ -22,7 +23,7 @@ import (
 	"github.com/zoolcoder/zc-workstation/internal/sh"
 )
 
-//go:embed templates/*.html
+//go:embed templates/*.html static
 var assets embed.FS
 
 const activityLimit = 200
@@ -100,6 +101,8 @@ func New(deps Deps) (*Server, error) {
 	}
 	s.tmpl = tmpl
 	s.shell.Mount(s.mux)
+	theme, _ := fs.Sub(assets, "static")
+	s.mux.Handle("GET /zc/", http.StripPrefix("/zc/", http.FileServerFS(theme)))
 
 	s.mux.HandleFunc("GET /{$}", s.dashboard)
 	s.mux.HandleFunc("GET /inventory", s.inventory)
@@ -180,7 +183,7 @@ func (s *Server) fail(w http.ResponseWriter, r *http.Request, code int, heading 
 	if err != nil {
 		detail = err.Error()
 	}
-	toolshell.Render(w, s.tmpl, code, "ts-error", toolshell.ErrorPage{Chrome: c, Code: code, Heading: c.T(heading), Detail: detail})
+	toolshell.Render(w, s.tmpl, code, "zc-error", toolshell.ErrorPage{Chrome: c, Code: code, Heading: c.T(heading), Detail: detail})
 }
 
 func (s *Server) notFound(w http.ResponseWriter, r *http.Request) {
