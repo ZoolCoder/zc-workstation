@@ -49,6 +49,7 @@ Usage:
   ` + name + ` apply    [flags] [file] make the changes; with a saved plan, exactly those
   ` + name + ` status   [flags]        what is in place right now, per target
   ` + name + ` list     [flags]        every package, dotfile and runtime, with versions
+  ` + name + ` capture  -target t      write t's manifest from what this machine has
   ` + name + ` validate [flags]        check the config offline
   ` + name + ` doctor   [-json]        health: system, config, programs, targets
 `
@@ -68,7 +69,11 @@ Flags:
   -yes             skip the confirmation prompt for deletions
   -exit-code       plan: exit 2 for changes, 3 for manual-only
   -json            plan, status and list: machine-readable
-  -out string      plan: save the plan, to apply exactly what you reviewed
+  -out string      plan: save the plan, to apply exactly what you reviewed;
+                   capture: write the manifest to this file, not stdout
+  -force           capture: overwrite the -out file
+  -state list      list: only these states, comma-separated (missing,outdated,...)
+  -kind list       list: only these kinds, comma-separated (brew,cask,dotfile,...)
 `
 
 func usage() string {
@@ -119,7 +124,7 @@ func runCLI(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 		return err
 	case "doctor":
 		return runDoctor(args, stdin, stdout, stderr)
-	case "plan", "apply", "status", "list", "validate":
+	case "plan", "apply", "status", "list", "capture", "validate":
 	default:
 		if run, ok := optional[cmd]; ok {
 			return run(args, stdin, stdout, stderr)
@@ -135,7 +140,10 @@ func runCLI(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	yes := flags.Bool("yes", false, "skip the deletion prompt")
 	exitCode := flags.Bool("exit-code", false, "exit 2 for changes, 3 for manual-only")
 	asJSON := flags.Bool("json", false, "machine-readable output")
-	out := flags.String("out", "", "save the plan to this file")
+	out := flags.String("out", "", "save the plan, or the captured manifest, to this file")
+	force := flags.Bool("force", false, "capture: overwrite the -out file")
+	states := flags.String("state", "", "list: only these states")
+	kinds := flags.String("kind", "", "list: only these kinds")
 	var targets targetList
 	flags.Var(&targets, "target", "limit to this target")
 	if err := flags.Parse(args); err != nil {
@@ -182,7 +190,10 @@ func runCLI(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 		return writeStatus(stdout, eng.Status(ctx), *asJSON)
 	}
 	if cmd == "list" {
-		return writeItems(stdout, eng.Items(ctx), *asJSON)
+		return writeItems(stdout, filterItems(eng.Items(ctx), *states, *kinds), *asJSON)
+	}
+	if cmd == "capture" {
+		return runCapture(ctx, eng, *out, *force, stdout)
 	}
 
 	p, err := eng.Plan(ctx)

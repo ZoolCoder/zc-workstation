@@ -9,6 +9,8 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+
+	"github.com/zoolcoder/zc-workstation/internal/config"
 )
 
 // fixture writes a config with one pruned target and returns its path and the
@@ -157,5 +159,34 @@ func TestListShowsEveryItem(t *testing.T) {
 	out, err = run(t, "", "list", "-config", cfg, "-json")
 	if err != nil || !strings.Contains(out, `"name": "a.txt"`) || !strings.Contains(out, `"state": "missing"`) {
 		t.Fatalf("list -json: %v\n%s", err, out)
+	}
+}
+
+func TestListFiltersAndCaptureRefuses(t *testing.T) {
+	cfg, _ := fixture(t)
+	if out, err := run(t, "", "list", "-config", cfg, "-state", "in place"); err != nil || strings.Contains(out, "a.txt") {
+		t.Fatalf("filtered list: %v\n%s", err, out)
+	}
+	if _, err := run(t, "", "capture", "-config", cfg); err == nil || !strings.Contains(err.Error(), "cannot capture") {
+		t.Fatalf("capture localdir: %v", err)
+	}
+}
+
+func TestCaptureWritesOnlyANewFileUnlessForced(t *testing.T) {
+	out := filepath.Join(t.TempDir(), "Brewfile")
+	data := []byte("brew \"git\"\n")
+	tg := config.Target{Name: "brew"}
+	var buf strings.Builder
+	if err := writeCapture(tg, data, out, false, &buf); err != nil || !strings.Contains(buf.String(), "captured brew to "+out) {
+		t.Fatalf("new file: %v %s", err, buf.String())
+	}
+	if err := writeCapture(tg, data, out, false, &buf); err == nil || !strings.Contains(err.Error(), "pass -force") {
+		t.Fatalf("existing file: %v", err)
+	}
+	if err := writeCapture(tg, []byte("x\n"), out, true, &buf); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := os.ReadFile(out); string(got) != "x\n" {
+		t.Fatalf("forced write %q", got)
 	}
 }
