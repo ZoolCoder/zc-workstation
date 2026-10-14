@@ -98,15 +98,13 @@ $ zc-workstation validate
 [source,console]
 ----
 $ zc-workstation plan -out plan.json
-CREATE  brew      brew:chezmoi           install with brew
-CREATE  dotfiles  .config/starship.toml  add
-CREATE  dotfiles  .gitconfig             add
-MANUAL  runtimes  trust                  mise does not trust .../mise.toml; review it, then run mise trust .../mise.toml
+CREATE  brew      brew:chezmoi  install with brew
+CREATE  dotfiles  .gitconfig    add
+MANUAL  runtimes  trust         mise does not trust .../mise.toml; review it, then run mise trust .../mise.toml
 
 1 of these cannot be automated and are yours to do.
 $ zc-workstation apply plan.json
 done  CREATE brew brew:chezmoi
-done  CREATE dotfiles .config/starship.toml
 done  CREATE dotfiles .gitconfig
 applied and verified
 ----

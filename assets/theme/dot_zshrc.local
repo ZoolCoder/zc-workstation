@@ -1,0 +1,2 @@
+# Machine-specific shell settings. zc-workstation's theme target writes this file; the line below loads its colours.
+[[ -f "$HOME/.config/zoolcoder/theme.zsh" ]] && source "$HOME/.config/zoolcoder/theme.zsh"
