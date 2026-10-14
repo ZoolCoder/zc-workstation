@@ -5,11 +5,13 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"regexp"
 	"slices"
 	"strings"
+	"sync"
 
 	"github.com/zoolcoder/zc-workstation/internal/sh"
 )
@@ -20,6 +22,9 @@ var managers = map[string]manager{
 		parse:     parseBrewfile,
 		installed: brewInstalled,
 		details:   brewDetails,
+		chosen:    brewChosen,
+		outdated:  brewOutdated,
+		upgrade:   brewUpgrade,
 		install: func(r sh.Runner, i item) func(context.Context) error {
 			switch i.Kind {
 			case "tap":
@@ -52,7 +57,12 @@ var managers = map[string]manager{
 		install: func(r sh.Runner, i item) func(context.Context) error {
 			return run(r, "sudo", "apt-get", "install", "-y", i.Name)
 		},
-		details: tabDetails("apt", "dpkg-query", "-W", "-f", "${Package}\t${Version}\t${binary:Summary}\t${Homepage}\n"),
+		details:  tabDetails("apt", "dpkg-query", "-W", "-f", "${Package}\t${Version}\t${binary:Summary}\t${Homepage}\n"),
+		chosen:   listChosen("apt", "apt-mark", "showmanual"),
+		outdated: aptOutdated,
+		upgrade: func(r sh.Runner, i item) func(context.Context) error {
+			return run(r, "sudo", "apt-get", "install", "--only-upgrade", "-y", i.Name)
+		},
 	},
 	"dnf": {
 		program: "dnf",
@@ -67,7 +77,12 @@ var managers = map[string]manager{
 		install: func(r sh.Runner, i item) func(context.Context) error {
 			return run(r, "sudo", "dnf", "install", "-y", i.Name)
 		},
-		details: tabDetails("dnf", "rpm", "-qa", "--qf", "%{NAME}\t%{VERSION}-%{RELEASE}\t%{SUMMARY}\t%{URL}\n"),
+		details:  tabDetails("dnf", "rpm", "-qa", "--qf", "%{NAME}\t%{VERSION}-%{RELEASE}\t%{SUMMARY}\t%{URL}\n"),
+		chosen:   listChosen("dnf", "dnf", "repoquery", "--userinstalled", "--qf", "%{name}\n"),
+		outdated: dnfOutdated,
+		upgrade: func(r sh.Runner, i item) func(context.Context) error {
+			return run(r, "sudo", "dnf", "upgrade", "-y", i.Name)
+		},
 	},
 	"winget": {
 		program:   "winget",
@@ -137,16 +152,30 @@ func parseBrewfile(data []byte) ([]item, []string, error) {
 
 func brewInstalled(ctx context.Context, r sh.Runner, items []item) (map[string]set, map[string]string, error) {
 	have := map[string]set{}
+	var (
+		mu   sync.Mutex
+		errs []error
+		wg   sync.WaitGroup
+	)
 	for kind, args := range map[string][]string{
 		"brew": {"list", "--formula", "-1", "--full-name"},
 		"cask": {"list", "--cask", "-1", "--full-name"},
 		"tap":  {"tap"},
 	} {
-		out, err := r.Output(ctx, "brew", args...)
-		if err != nil {
-			return nil, nil, err
-		}
-		have[kind] = newSet(lines(out)...)
+		wg.Go(func() {
+			out, err := r.Output(ctx, "brew", args...)
+			mu.Lock()
+			defer mu.Unlock()
+			if err != nil {
+				errs = append(errs, err)
+				return
+			}
+			have[kind] = newSet(lines(out)...)
+		})
+	}
+	wg.Wait()
+	if err := errors.Join(errs...); err != nil {
+		return nil, nil, err
 	}
 	unreadable := map[string]string{}
 	if wantsKind(items, "mas") {

@@ -105,3 +105,39 @@ func TestStatusUsesMeasure(t *testing.T) {
 		t.Fatalf("status %+v", st)
 	}
 }
+
+func TestExtrasAnotherTargetDeclaresAreDropped(t *testing.T) {
+	rows := dropDeclaredExtras([]TargetItems{
+		{Target: "work", Items: []provider.Item{
+			{Kind: "brew", Name: "jq", State: provider.Extra},
+			{Kind: "brew", Name: "git", State: provider.InPlace},
+			{Kind: "cask", Name: "raycast", State: provider.Extra},
+		}},
+		{Target: "home", Items: []provider.Item{
+			{Kind: "brew", Name: "acme/tap/jq", State: provider.Missing},
+			{Kind: "brew", Name: "git", State: provider.Extra},
+			{Kind: "cask", Name: "raycast", State: provider.Extra},
+		}},
+	})
+	var got []string
+	for _, r := range rows {
+		for _, i := range r.Items {
+			got = append(got, r.Target+" "+i.Name+" "+i.State)
+		}
+	}
+	want := "work git in place, work raycast not declared, home acme/tap/jq missing"
+	if strings.Join(got, ", ") != want {
+		t.Fatalf("rows\n%s", strings.Join(got, ", "))
+	}
+}
+
+func TestCaptureNeedsOneCapturingTarget(t *testing.T) {
+	e, _ := New(cfg(t.TempDir()), Default(), nil)
+	if _, _, err := e.Capture(context.Background()); err == nil || !strings.Contains(err.Error(), "exactly one target") {
+		t.Fatalf("two targets: %v", err)
+	}
+	e, _ = New(cfg(t.TempDir()), Default(), []string{"a"})
+	if _, _, err := e.Capture(context.Background()); err == nil || !strings.Contains(err.Error(), "cannot capture") {
+		t.Fatalf("localdir: %v", err)
+	}
+}

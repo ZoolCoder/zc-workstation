@@ -86,7 +86,7 @@ func TestParseChecksEachProvidersFields(t *testing.T) {
 version: 1
 targets:
   - {name: pk, provider: packages, manager: pacman, os: [plan9]}
-  - {name: df, provider: dotfiles, mode: hardlink, file: x}
+  - {name: df, provider: dotfiles, mode: hardlink, file: x, upgrade: true}
   - {name: tl, provider: tools, source: home}
 `))
 	if err == nil {
@@ -94,7 +94,7 @@ targets:
 	}
 	for _, want := range []string{
 		"target pk: file is required", `manager "pacman"`, `os "plan9"`,
-		"target df: source is required", `mode "hardlink"`, "target df: file does nothing",
+		"target df: source is required", `mode "hardlink"`, "target df: file does nothing", "target df: upgrade does nothing",
 		"target tl: file is required", "target tl: source does nothing",
 	} {
 		if !strings.Contains(err.Error(), want) {

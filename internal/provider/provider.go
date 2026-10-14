@@ -48,6 +48,10 @@ const (
 	Missing = "missing"
 	Differs = "differs"
 	Manual  = "manual"
+	// Outdated is in place, with a newer version available.
+	Outdated = "outdated"
+	// Extra is installed on purpose but declared by no target.
+	Extra = "not declared"
 )
 
 // Item is one thing a target declares, with what this machine says about it.
@@ -58,6 +62,8 @@ type Item struct {
 	State string `json:"state"`
 	// Version is what is installed, when that can be read.
 	Version string `json:"version,omitempty"`
+	// Latest is the newer version an outdated item can move to.
+	Latest string `json:"latest,omitempty"`
 	// App is what the item belongs to: the application a cask installs, or
 	// the program a dotfile configures.
 	App      string `json:"app,omitempty"`
@@ -69,4 +75,10 @@ type Item struct {
 // for the inventory.
 type Lister interface {
 	Items(ctx context.Context, t config.Target) ([]Item, error)
+}
+
+// Capturer is a Provider that can write its manifest from what the machine
+// has, so a config can start from a machine that is already set up.
+type Capturer interface {
+	Capture(ctx context.Context, t config.Target) ([]byte, error)
 }

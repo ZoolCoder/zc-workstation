@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"regexp"
 	"strings"
+	"sync"
 
 	"github.com/zoolcoder/zc-workstation/internal/config"
 	"github.com/zoolcoder/zc-workstation/internal/provider"
@@ -16,33 +17,47 @@ type detail struct {
 	Version, App, Desc, Homepage string
 }
 
-// details maps "kind:name" (lower case) to what the manager knows about it.
+// details maps "kind:name" (lower case), or "mas:ID", to what the manager
+// knows about it.
 type details map[string]detail
 
-func (d details) find(i item) detail {
-	key := strings.ToLower(i.Name)
-	if i.ID != "" {
-		key = i.ID
-	}
-	if v, ok := d[i.Kind+":"+key]; ok {
-		return v
-	}
-	return d[i.Kind+":"+key[strings.LastIndex(key, "/")+1:]]
-}
-
 // Items lists every declared package with its state and, when the manager
-// can say, its version and description.
+// can say, its version, pending update and description. Packages installed
+// on purpose that the manifest does not declare follow, as Extra.
 func (p Provider) Items(ctx context.Context, t config.Target) ([]provider.Item, error) {
-	s, err := p.read(ctx, t)
+	m := managers[p.Manager(t)]
+	// Details, updates and extras are extra: a manager that cannot give them
+	// still lists what is declared. Each is a separate, slow-ish call, so
+	// they run alongside the read.
+	var (
+		s      state
+		err    error
+		info   = details{}
+		news   = updates{}
+		chosen []item
+		wg     sync.WaitGroup
+	)
+	wg.Go(func() { s, err = p.read(ctx, t) })
+	if m.details != nil {
+		wg.Go(func() {
+			if d, err := m.details(ctx, p.r); err == nil {
+				info = d
+			}
+		})
+	}
+	if m.outdated != nil {
+		wg.Go(func() {
+			if u, err := m.outdated(ctx, p.r); err == nil {
+				news = u
+			}
+		})
+	}
+	if m.chosen != nil {
+		wg.Go(func() { chosen, _ = m.chosen(ctx, p.r) })
+	}
+	wg.Wait()
 	if err != nil {
 		return nil, err
-	}
-	// Details are extra: a manager that cannot give them still lists items.
-	info := details{}
-	if read := managers[s.manager].details; read != nil {
-		if d, err := read(ctx, p.r); err == nil {
-			info = d
-		}
 	}
 	state := map[string]string{}
 	for _, i := range s.missing {
@@ -57,16 +72,51 @@ func (p Provider) Items(ctx context.Context, t config.Target) ([]provider.Item, 
 		if !ok {
 			st = provider.InPlace
 		}
-		d := info.find(i)
-		items = append(items, provider.Item{Name: i.Name, Kind: i.Kind, State: st,
-			Version: d.Version, App: d.App, Desc: d.Desc, Homepage: d.Homepage})
+		item := describe(i, st, info)
+		if v, ok := lookup(news, i); ok && st == provider.InPlace {
+			item.State, item.Latest = provider.Outdated, v.To
+			if item.Version == "" {
+				item.Version = v.From
+			}
+		}
+		items = append(items, item)
 	}
 	for _, u := range s.unsupported {
 		kind, name, _ := strings.Cut(u, ":")
 		items = append(items, provider.Item{Name: name, Kind: kind, State: provider.Manual,
 			Desc: "zc-workstation does not install this kind of entry"})
 	}
+	for _, i := range extras(chosen, s.items) {
+		items = append(items, describe(i, provider.Extra, info))
+	}
 	return items, nil
+}
+
+func describe(i item, state string, info details) provider.Item {
+	d, _ := lookup(info, i)
+	return provider.Item{Name: i.Name, Kind: i.Kind, State: state,
+		Version: d.Version, App: d.App, Desc: d.Desc, Homepage: d.Homepage}
+}
+
+// extras is what chosen holds that declared does not, compared as lookup
+// compares: by App Store id, full name, or a tapped package's short name.
+func extras(chosen, declared []item) []item {
+	known := map[string]bool{}
+	for _, i := range declared {
+		if i.ID != "" {
+			known[i.Kind+":"+i.ID] = true
+		}
+		key := strings.ToLower(i.Name)
+		known[i.Kind+":"+key] = true
+		known[i.Kind+":"+key[strings.LastIndex(key, "/")+1:]] = true
+	}
+	var out []item
+	for _, i := range chosen {
+		if _, ok := lookup(known, i); !ok {
+			out = append(out, i)
+		}
+	}
+	return out
 }
 
 // brewDetails reads every installed formula and cask in one call, then the

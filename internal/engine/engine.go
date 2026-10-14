@@ -9,6 +9,7 @@ import (
 	"runtime"
 	"slices"
 	"strings"
+	"sync"
 
 	"github.com/zoolcoder/zc-workstation/internal/config"
 	"github.com/zoolcoder/zc-workstation/internal/plan"
@@ -190,10 +191,12 @@ func (e *Engine) Programs() []string {
 type Item = provider.Item
 
 const (
-	InPlace = provider.InPlace
-	Missing = provider.Missing
-	Differs = provider.Differs
-	Manual  = provider.Manual
+	InPlace  = provider.InPlace
+	Missing  = provider.Missing
+	Differs  = provider.Differs
+	Manual   = provider.Manual
+	Outdated = provider.Outdated
+	Extra    = provider.Extra
 )
 
 // TargetItems is one target's inventory: what it declares, item by item.
@@ -208,26 +211,93 @@ type TargetItems struct {
 // Items lists every selected target's items. Like Status, a target that
 // cannot be read reports it in its row.
 func (e *Engine) Items(ctx context.Context) []TargetItems {
-	out := make([]TargetItems, 0, len(e.targets))
-	for _, t := range e.targets {
-		row := TargetItems{Target: t.Name, Provider: t.Provider, Items: []provider.Item{}}
-		if !t.ForOS(GOOS) {
-			row.Skipped = true
-			out = append(out, row)
-			continue
+	// Targets read different programs, so they are read side by side.
+	out := make([]TargetItems, len(e.targets))
+	var wg sync.WaitGroup
+	for n, t := range e.targets {
+		wg.Go(func() { out[n] = e.items(ctx, t) })
+	}
+	wg.Wait()
+	return dropDeclaredExtras(out)
+}
+
+func (e *Engine) items(ctx context.Context, t config.Target) TargetItems {
+	row := TargetItems{Target: t.Name, Provider: t.Provider, Items: []provider.Item{}}
+	if !t.ForOS(GOOS) {
+		row.Skipped = true
+		return row
+	}
+	prov, err := e.provider(t)
+	if err == nil {
+		if l, ok := prov.(provider.Lister); ok {
+			row.Items, err = l.Items(ctx, t)
+		} else {
+			err = fmt.Errorf("provider %s cannot list its items", t.Provider)
 		}
-		prov, err := e.provider(t)
-		if err == nil {
-			if l, ok := prov.(provider.Lister); ok {
-				row.Items, err = l.Items(ctx, t)
-			} else {
-				err = fmt.Errorf("provider %s cannot list its items", t.Provider)
+	}
+	if err != nil {
+		row.Error = err.Error()
+	}
+	return row
+}
+
+// dropDeclaredExtras keeps an Extra item only if no target declares it and
+// no earlier target already listed it: two Brewfile targets each see the
+// other's packages as undeclared.
+func dropDeclaredExtras(rows []TargetItems) []TargetItems {
+	seen := map[string]bool{}
+	for _, r := range rows {
+		for _, i := range r.Items {
+			if i.State != provider.Extra {
+				seen[itemKey(i)] = true
 			}
 		}
-		if err != nil {
-			row.Error = err.Error()
-		}
-		out = append(out, row)
 	}
-	return out
+	for n, r := range rows {
+		kept := r.Items[:0]
+		for _, i := range r.Items {
+			if i.State == provider.Extra {
+				if seen[itemKey(i)] {
+					continue
+				}
+				seen[itemKey(i)] = true
+			}
+			kept = append(kept, i)
+		}
+		rows[n].Items = kept
+	}
+	return rows
+}
+
+// itemKey names an item across targets: its kind and short name, and for a
+// runtime its version too, since each version is its own item.
+func itemKey(i provider.Item) string {
+	name := strings.ToLower(i.Name)
+	key := i.Kind + ":" + name[strings.LastIndex(name, "/")+1:]
+	if i.Kind == "runtime" {
+		key += "@" + i.Version
+	}
+	return key
+}
+
+// Capture writes the manifest the one selected target would declare to
+// match this machine.
+func (e *Engine) Capture(ctx context.Context) (config.Target, []byte, error) {
+	if len(e.targets) != 1 {
+		return config.Target{}, nil, fmt.Errorf("capture needs exactly one target, %d selected; use -target", len(e.targets))
+	}
+	t := e.targets[0]
+	if !t.ForOS(GOOS) {
+		return t, nil, fmt.Errorf("target %s is not for this system", t.Name)
+	}
+	prov, err := e.provider(t)
+	if err != nil {
+		return t, nil, err
+	}
+	c, ok := prov.(provider.Capturer)
+	if !ok {
+		return t, nil, fmt.Errorf("provider %s cannot capture", t.Provider)
+	}
+	data, err := c.Capture(ctx, t)
+	return t, data, err
 }

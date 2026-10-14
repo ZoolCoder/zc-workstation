@@ -223,3 +223,90 @@ func TestAptItemsReadDpkg(t *testing.T) {
 		t.Fatalf("items %+v %v", items, err)
 	}
 }
+
+const outdatedJSON = `{"formulae": [
+	{"name": "git", "installed_versions": ["2.56.0"], "current_version": "2.57.0", "pinned": false},
+	{"name": "tmux", "installed_versions": ["3.7"], "current_version": "3.8", "pinned": true}],
+	"casks": []}`
+
+func TestItemsShowUpdatesAndUndeclared(t *testing.T) {
+	r := brewMachine()
+	r.Out["brew outdated --json=v2"] = outdatedJSON
+	r.Out["brew leaves --installed-on-request"] = "git\nfelixkratz/formulae/sketchybar\njq\n"
+	r.Out["brew list --cask -1 --full-name"] = "raycast\n"
+	r.Out["mas list"] = "1352778147  Bitwarden  (2026.9.1)\n640199958  Developer  (11.1)\n"
+	r.Out["mas outdated"] = "1352778147 Bitwarden (2026.9.1 -> 2026.10.0)\n"
+	items, err := New(r, "darwin").Items(context.Background(), manifest(t, "Brewfile", brewfile))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, i := range items {
+		if i.State == "outdated" || i.State == "not declared" {
+			got = append(got, i.Kind+"|"+i.Name+"|"+i.State+"|"+i.Version+"|"+i.Latest)
+		}
+	}
+	want := []string{
+		"brew|git|outdated|2.56.0|2.57.0",
+		"mas|Bitwarden|outdated|2026.9.1|2026.10.0",
+		"brew|jq|not declared||",
+		"cask|raycast|not declared||",
+		"mas|Developer|not declared||",
+	}
+	if strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Fatalf("items\n%s", strings.Join(got, "\n"))
+	}
+}
+
+func TestUpgradeIsOptIn(t *testing.T) {
+	r := brewMachine()
+	r.Out["brew outdated --json=v2"] = outdatedJSON
+	r.Out["mas outdated"] = ""
+	tg := manifest(t, "Brewfile", `brew "git"`+"\n"+`brew "tmux"`)
+	r.Out["brew list --formula -1 --full-name"] += "tmux\n"
+	if actions, _ := New(r, "darwin").Plan(context.Background(), tg); len(actions) != 0 {
+		t.Fatalf("plan without upgrade %v", resources(actions))
+	}
+	tg.Upgrade = true
+	actions, err := New(r, "darwin").Plan(context.Background(), tg)
+	// tmux is pinned, so only git upgrades.
+	if err != nil || strings.Join(resources(actions), ",") != "UPDATE brew:git" || actions[0].Detail != "upgrade with brew, 2.56.0 to 2.57.0" {
+		t.Fatalf("plan %v %v", actions, err)
+	}
+	_ = actions[0].Do(context.Background())
+	if r.Ran[0] != "brew upgrade git" {
+		t.Fatalf("ran %v", r.Ran)
+	}
+}
+
+func TestCaptureWritesABrewfile(t *testing.T) {
+	r := brewMachine()
+	r.Out["brew tap"] = "homebrew/core\nfelixkratz/formulae\n"
+	r.Out["brew leaves --installed-on-request"] = "git\n"
+	r.Out["brew list --cask -1 --full-name"] = "ghostty\n"
+	got, err := New(r, "darwin").Capture(context.Background(), manifest(t, "Brewfile", ""))
+	want := "# Captured by zc-workstation from what this machine has installed.\n" +
+		"tap \"felixkratz/formulae\"\nbrew \"git\"\ncask \"ghostty\"\nmas \"Bitwarden\", id: 1352778147\n"
+	if err != nil || string(got) != want {
+		t.Fatalf("capture %v\n%s", err, got)
+	}
+	// A captured Brewfile reads back.
+	if _, _, err := parseBrewfile(got); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestAptAndDnfUpdates(t *testing.T) {
+	r := &sh.Fake{Out: map[string]string{
+		"apt list --upgradable":  "Listing...\ngit/noble-updates 1:2.43.0-1ubuntu7.2 amd64 [upgradable from: 1:2.43.0-1ubuntu7.1]\n",
+		"dnf -q list --upgrades": "Available Upgrades\ngit.x86_64  2.45.2-1.fc40  updates\n",
+	}}
+	a, err := aptOutdated(context.Background(), r)
+	if err != nil || a["apt:git"] != (update{"1:2.43.0-1ubuntu7.1", "1:2.43.0-1ubuntu7.2"}) {
+		t.Fatalf("apt %v %v", a, err)
+	}
+	d, err := dnfOutdated(context.Background(), r)
+	if err != nil || len(d) != 1 || d["dnf:git"].To != "2.45.2-1.fc40" {
+		t.Fatalf("dnf %v %v", d, err)
+	}
+}

@@ -44,6 +44,13 @@ type manager struct {
 	// details reads versions and descriptions for the inventory; nil when
 	// the manager has no cheap way to say.
 	details func(ctx context.Context, r sh.Runner) (details, error)
+	// chosen lists what a person installed on purpose, declared or not, for
+	// the inventory's extras and for capture; nil when the manager cannot say.
+	chosen func(ctx context.Context, r sh.Runner) ([]item, error)
+	// outdated reads pending updates, and upgrade applies one; nil when the
+	// manager cannot say.
+	outdated func(ctx context.Context, r sh.Runner) (updates, error)
+	upgrade  func(r sh.Runner, i item) func(context.Context) error
 }
 
 // Manager is the package manager t uses on this system.
@@ -134,7 +141,59 @@ func (p Provider) Plan(ctx context.Context, t config.Target) ([]plan.Action, err
 			Detail: "install with " + installer(s.manager, i), Do: m.install(p.r, i),
 		})
 	}
+	if t.Upgrade {
+		actions = append(actions, p.upgrades(ctx, t, s)...)
+	}
 	return actions, nil
+}
+
+// upgrades is one UPDATE per installed, declared package with a newer
+// version. A manager that cannot tell is one MANUAL step saying so.
+func (p Provider) upgrades(ctx context.Context, t config.Target, s state) []plan.Action {
+	m := managers[s.manager]
+	if m.outdated == nil {
+		return []plan.Action{manual(t, "upgrade", s.manager+" cannot list updates here; upgrade by hand")}
+	}
+	u, err := m.outdated(ctx, p.r)
+	if err != nil {
+		return []plan.Action{manual(t, "upgrade", "cannot read updates: "+err.Error())}
+	}
+	var actions []plan.Action
+	for _, i := range s.installed() {
+		if v, ok := lookup(u, i); ok {
+			actions = append(actions, plan.Action{
+				Op: plan.OpUpdate, Target: t.Name, Resource: i.resource(),
+				Detail: fmt.Sprintf("upgrade with %s, %s to %s", installer(s.manager, i), dash(v.From), v.To),
+				Do:     m.upgrade(p.r, i),
+			})
+		}
+	}
+	return actions
+}
+
+// installed is the declared items that are in place.
+func (s state) installed() []item {
+	gone := map[string]bool{}
+	for _, i := range s.missing {
+		gone[i.resource()] = true
+	}
+	for _, a := range s.manual {
+		gone[a.Resource] = true
+	}
+	var out []item
+	for _, i := range s.items {
+		if !gone[i.resource()] && i.Kind != "tap" {
+			out = append(out, i)
+		}
+	}
+	return out
+}
+
+func dash(s string) string {
+	if s == "" {
+		return "?"
+	}
+	return s
 }
 
 // Measure counts the declared packages that are installed.

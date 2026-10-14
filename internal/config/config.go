@@ -50,6 +50,9 @@ type Target struct {
 	File string `yaml:"file"`
 	// Manager is the package manager for File; empty picks this system's.
 	Manager string `yaml:"manager"`
+	// Upgrade makes plan upgrade declared packages or runtimes that have a
+	// newer version, not only install the missing ones.
+	Upgrade bool `yaml:"upgrade"`
 	// Source is the chezmoi source directory the dotfiles provider applies.
 	Source string `yaml:"source"`
 	// Destination is where dotfiles land; empty means the home directory.
@@ -237,6 +240,9 @@ func (t Target) validateFields(where string) []error {
 	}
 	if t.Provider != "packages" {
 		unused("manager", t.Manager != "")
+	}
+	if t.Provider != "packages" && t.Provider != "tools" {
+		unused("upgrade", t.Upgrade)
 	}
 	if t.Provider != "dotfiles" {
 		unused("source", t.Source != "")
