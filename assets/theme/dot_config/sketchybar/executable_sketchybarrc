@@ -30,9 +30,8 @@ sketchybar --add item clock right --set clock icon=󰃰 icon.color=$ACCENT updat
 sketchybar --add event theme_changed AppleInterfaceThemeChangedNotification \
   --add item theme left --set theme drawing=off script="$PLUGIN_DIR/theme.sh" --subscribe theme theme_changed
 
-# The private overlay can add its own items, with the colours above; see docs/modules/ROOT/pages/overlay.adoc.
-OVERLAY_BAR="$HOME/.config/aurora-mac/overlay/sketchybar.sh"
+# Extra items for one Mac, with the colours above, go in ~/.config/sketchybar/local.sh.
 # shellcheck source=/dev/null
-[ -f "$OVERLAY_BAR" ] && source "$OVERLAY_BAR"
+[ -f "$CONFIG_DIR/local.sh" ] && source "$CONFIG_DIR/local.sh"
 
 sketchybar --update

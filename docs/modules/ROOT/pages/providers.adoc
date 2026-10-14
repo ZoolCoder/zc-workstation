@@ -121,8 +121,9 @@ zc-workstation ships one source of its own, `assets/theme`: the ZoolCoder
 colours for Ghostty, tmux, starship, SketchyBar, JankyBorders, bat, btop, eza,
 yazi, lazygit and fastfetch, each with a dark and a light variant. Its shell
 settings, such as `BAT_THEME_DARK` and `FZF_DEFAULT_OPTS`, sit in
-`~/.config/zoolcoder/theme.zsh`, which the source's `~/.zshrc.local` loads; an
-existing `.zshrc` needs one line, `source ~/.zshrc.local`. After apply, reload
+`~/.config/zoolcoder/theme.zsh`. The source creates `~/.zshrc.local` to load
+it, once: an existing `~/.zshrc.local` is left alone and needs the line itself,
+and an existing `.zshrc` needs one line, `source ~/.zshrc.local`. After apply, reload
 what is running: `sketchybar --reload`, `~/.config/borders/bordersrc`, and
 `tmux source-file ~/.config/tmux/tmux.conf`.
 
