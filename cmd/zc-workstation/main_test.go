@@ -59,7 +59,8 @@ func TestSavedPlanRefusesWhenTheWorldMoved(t *testing.T) {
 	if _, err := run(t, "", "plan", "-config", cfg, "-json", "-out", saved); err != nil {
 		t.Fatal(err)
 	}
-	if info, err := os.Stat(saved); err != nil || info.Mode().Perm() != 0o600 {
+	// Windows has no Unix permission bits, so the mode is checked elsewhere only.
+	if info, err := os.Stat(saved); err != nil || runtime.GOOS != "windows" && info.Mode().Perm() != 0o600 {
 		t.Fatalf("saved plan %v %v", info, err)
 	}
 	_ = os.MkdirAll(dir, 0o755)

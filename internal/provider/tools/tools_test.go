@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -29,12 +30,12 @@ func TestPlanInstallsMissingVersionsFromThisFileOnly(t *testing.T) {
 		t.Fatal(err)
 	}
 	r := &sh.Fake{Programs: []string{"mise"}, Out: map[string]string{ls: `{
-		"node": [{"version": "22.11.0", "requested_version": "lts", "installed": true, "source": {"path": "` + tg.File + `"}}],
+		"node": [{"version": "22.11.0", "requested_version": "lts", "installed": true, "source": {"path": ` + strconv.Quote(tg.File) + `}}],
 		"java": [
-			{"version": "temurin-25.0.1", "requested_version": "temurin-25", "installed": false, "source": {"path": "` + tg.File + `"}},
-			{"version": "temurin-21.0.5", "requested_version": "temurin-21", "installed": true, "source": {"path": "` + tg.File + `"}}
+			{"version": "temurin-25.0.1", "requested_version": "temurin-25", "installed": false, "source": {"path": ` + strconv.Quote(tg.File) + `}},
+			{"version": "temurin-21.0.5", "requested_version": "temurin-21", "installed": true, "source": {"path": ` + strconv.Quote(tg.File) + `}}
 		],
-		"go": [{"version": "1.26.0", "requested_version": "latest", "installed": false, "source": {"path": "` + other + `"}}],
+		"go": [{"version": "1.26.0", "requested_version": "latest", "installed": false, "source": {"path": ` + strconv.Quote(other) + `}}],
 		"jq": [{"version": "1.7.1", "installed": true}]
 	}`}}
 	p := New(r)
@@ -88,7 +89,7 @@ func TestOutdatedExtraUpgradeAndCapture(t *testing.T) {
 	r := &sh.Fake{Programs: []string{"mise"}, Out: map[string]string{
 		ls: `{
 		"node": [
-			{"version": "24.1.0", "requested_version": "lts", "installed": true, "source": {"path": "` + tg.File + `"}},
+			{"version": "24.1.0", "requested_version": "lts", "installed": true, "source": {"path": ` + strconv.Quote(tg.File) + `}},
 			{"version": "22.22.2", "installed": true}
 		],
 		"jq": [{"version": "1.7.1", "requested_version": "latest", "installed": true, "source": {"path": "/home/me/.config/mise/config.toml"}}]
