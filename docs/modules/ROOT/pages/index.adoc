@@ -1,32 +1,78 @@
 = What zc-workstation is
-:description: A declarative reconcile tool: one YAML file says what should exist, the tool plans, applies and verifies.
+:description: Set up a developer workstation on macOS, Linux and Windows from one YAML file: packages, dotfiles and runtimes, planned before anything changes.
 
-One file says what should exist. `zc-workstation` reads what exists now,
-prints the difference, and only if you ask, closes it.
+One YAML file says what a workstation needs: the packages, the dotfiles, the
+language runtimes. `zc-workstation` reads what this machine has, prints the
+difference, and only if you ask, closes it. Every apply is checked by planning
+again.
 
 [source,console]
 ----
 $ zc-workstation plan
-CREATE  notes  README.md      new file, 69 bytes
-CREATE  notes  todo/today.md  new file, 41 bytes
+CREATE  brew      cask:ghostty           install with brew
+CREATE  brew      mas:uBlock Origin Lite install with mas
+UPDATE  dotfiles  .gitconfig             update; changed outside chezmoi, apply overwrites it
+CREATE  runtimes  java@temurin-25        install with mise
 ----
+
+== What it manages
+
+[cols="1,2,2"]
+|===
+| Provider | Reads | Changes with
+
+| xref:providers.adoc#packages[`packages`]
+| A Brewfile, an apt or dnf package list, or a winget import file
+| `brew`, `mas`, `apt-get`, `dnf`, `winget`
+
+| xref:providers.adoc#dotfiles[`dotfiles`]
+| A chezmoi source directory
+| `chezmoi apply`, one path at a time
+
+| xref:providers.adoc#tools[`tools`]
+| A mise config file
+| `mise install`
+
+| xref:providers.adoc#localdir[`localdir`]
+| Files written inline in the config
+| Direct writes inside one directory
+|===
+
+It does not reimplement these tools. chezmoi already handles templates,
+secrets and per-machine differences, and mise already resolves versions.
+`zc-workstation` adds one plan across all of them, a dashboard, and the same
+rules for every surface.
+
+== One config, three systems
+
+A target can name the systems it is for. The same file then describes the
+Mac, the Linux laptop and the Windows desktop:
+
+[source,yaml]
+----
+targets:
+  - {name: brew,   provider: packages, os: [darwin],  file: packages/Brewfile}
+  - {name: apt,    provider: packages, os: [linux],   file: packages/apt.txt}
+  - {name: winget, provider: packages, os: [windows], file: packages/winget.json}
+  - {name: dotfiles, provider: dotfiles, source: home}
+  - {name: runtimes, provider: tools, file: mise.toml}
+----
+
+A target for another system is skipped, and shown as skipped.
 
 == The loop
 
-. *Plan* reads live state through a provider and lists actions: `CREATE`,
+. *Plan* asks each provider what is missing and lists actions: `CREATE`,
   `UPDATE`, `DELETE` and `MANUAL`. Planning writes nothing.
-. *Apply* runs the actions, then plans again. A change the target accepted but
-  did not keep is reported as still outstanding, never as done.
-. *Saved plans* pin what was reviewed: `plan -out` writes it, `apply FILE`
-  refuses when live state moved since.
+. *Apply* runs the actions in order, then plans again. A change that ran but
+  did not take is reported as still outstanding, never as done.
+. *Saved plans* pin what was reviewed. `plan -out` writes the plan, and
+  `apply FILE` refuses when the machine changed since.
+. *MANUAL* is what no tool should do for you, such as installing the package
+  manager itself or trusting a mise config. The plan says what to run.
 
 == Four surfaces, one contract
 
-The CLI is the contract. The admin page, the MCP server, the agent skills and
-scripts all go through the same plan and apply, with the same refusals.
-
-== What it ships with
-
-One provider, `localdir`, which keeps a directory holding exactly the files
-the config lists. It is the worked example for
-xref:extending.adoc[writing your own].
+The CLI is the contract. The xref:ui.adoc[dashboard], the
+xref:agents.adoc[MCP server], the agent skills and scripts all go through the
+same plan and apply, with the same refusals.

@@ -1,7 +1,49 @@
 = Getting started
-:description: Install zc-workstation, write a config, plan and apply.
+:description: Install zc-workstation and the tools it drives on macOS, Linux or Windows, then plan and apply.
 
-== Install
+== Install the tools it drives
+
+`zc-workstation` runs your package manager, chezmoi and mise. Install the
+ones your config uses. A missing one shows up in the plan as a `MANUAL` step,
+so you can also start with `plan` and follow it.
+
+[tabs]
+====
+macOS::
++
+[source,console]
+----
+$ /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+$ brew install chezmoi mise mas
+----
+
+Ubuntu and Debian::
++
+[source,console]
+----
+$ sudo apt-get install -y curl git
+$ sh -c "$(curl -fsLS get.chezmoi.io)" -- -b ~/.local/bin
+$ curl https://mise.run | sh
+----
+
+Fedora::
++
+[source,console]
+----
+$ sudo dnf install -y chezmoi git
+$ curl https://mise.run | sh
+----
+
+Windows::
++
+[source,powershell]
+----
+PS> winget install --id twpayne.chezmoi --exact
+PS> winget install --id jdx.mise --exact
+----
+====
+
+== Install zc-workstation
 
 [tabs]
 ====
@@ -12,6 +54,20 @@ Homebrew::
 $ brew tap zoolcoder/zc-workstation https://github.com/zoolcoder/zc-workstation
 $ brew install --cask zc-workstation
 ----
+
+Linux packages::
++
+Each release has `.deb`, `.rpm` and `.apk` packages.
++
+[source,console]
+----
+$ sudo apt-get install ./zc-workstation_*_linux_amd64.deb
+----
+
+Windows::
++
+Download the `windows_amd64` or `windows_arm64` zip from the releases page and
+put `zc-workstation.exe` on your `PATH`.
 
 Go::
 +
@@ -25,13 +81,16 @@ Needs Go {go-version} or later.
 
 == Write a config
 
-Copy `zc-workstation.example.yaml` to `zc-workstation.yaml` and edit it.
-xref:configuration.adoc[Writing a config] lists every key.
+Start from `zc-workstation.example.yaml`. It declares a target for each system
+and points at the sample manifests in `example/`. Point it at your own dotfiles
+repository instead. xref:configuration.adoc[Writing a config] lists every key.
 
 [source,console]
 ----
+$ mkdir -p ~/.config/zc-workstation
+$ cp zc-workstation.example.yaml ~/.config/zc-workstation/zc-workstation.yaml
 $ zc-workstation validate
-zc-workstation.yaml: 1 target(s), valid
+/Users/me/.config/zc-workstation/zc-workstation.yaml: 6 target(s), valid
 ----
 
 == Plan, then apply
@@ -39,20 +98,37 @@ zc-workstation.yaml: 1 target(s), valid
 [source,console]
 ----
 $ zc-workstation plan -out plan.json
-CREATE  notes  README.md      new file, 69 bytes
-CREATE  notes  todo/today.md  new file, 41 bytes
+CREATE  brew      brew:chezmoi           install with brew
+CREATE  dotfiles  .config/starship.toml  add
+CREATE  dotfiles  .gitconfig             add
+MANUAL  runtimes  trust                  mise does not trust .../mise.toml; review it, then run mise trust .../mise.toml
+
+1 of these cannot be automated and are yours to do.
 $ zc-workstation apply plan.json
-done  CREATE notes README.md
-done  CREATE notes todo/today.md
+done  CREATE brew brew:chezmoi
+done  CREATE dotfiles .config/starship.toml
+done  CREATE dotfiles .gitconfig
 applied and verified
 ----
 
-== Check the install
+Installs run attached to your terminal, so `sudo`, a license prompt or the App
+Store sign-in can ask you directly.
+
+== Check the machine
 
 [source,console]
 ----
 $ zc-workstation doctor
-ok    binary        /opt/homebrew/bin/zc-workstation (PATH: /opt/homebrew/bin/zc-workstation)
-ok    config        zc-workstation.yaml, 1 target(s)
-ok    target notes  2 of 2 declared files in place, 2 files on disk
+ok    binary           /opt/homebrew/bin/zc-workstation
+ok    system           macbook darwin/arm64
+ok    config           /Users/me/.config/zc-workstation/zc-workstation.yaml, 6 target(s)
+ok    program brew     /opt/homebrew/bin/brew
+ok    program chezmoi  /opt/homebrew/bin/chezmoi
+ok    program mise     /opt/homebrew/bin/mise
+warn  target brew      78 of 80 packages installed (brew)
+ok    target apt       not for darwin, only linux
+ok    target dotfiles  2 of 2 dotfiles in place
+ok    target runtimes  7 of 7 tools installed
 ----
+
+Then open the xref:ui.adoc[dashboard] with `zc-workstation ui`.

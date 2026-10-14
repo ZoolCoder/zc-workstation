@@ -9,7 +9,7 @@ compatibility: Needs zc-workstation on PATH and a passing `zc-workstation doctor
 
 ## 1. Plan
 
-MCP: `plan`, with `targets` when the user named some. CLI: `zc-workstation plan -json -target notes -out plan.json`.
+MCP: `plan`, with `targets` when the user named some. CLI: `zc-workstation plan -json -target brew -out plan.json`.
 
 Explain every action, grouped by target:
 

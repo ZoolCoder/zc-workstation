@@ -1,5 +1,5 @@
-= Admin page
-:description: The zc-workstation admin page: targets, plans and applies in a browser.
+= Dashboard
+:description: The zc-workstation dashboard: what this machine has, what is missing, and plan and apply per target.
 
 [source,console]
 ----
@@ -7,17 +7,56 @@ $ zc-workstation ui
 zc-workstation ui on http://127.0.0.1:7780/ (this machine only; Ctrl-C to stop)
 ----
 
-The page lists targets with their live status. A target's page plans, shows
-each action, and applies.
+The config is read again on every request, so an edit shows on reload.
+
+== This machine
+
+The front page reads every target and shows:
+
+* *Next step*: targets that cannot be read, else the number of items still to
+  put in place, else all clear.
+* *Targets*: how many are for this system, and how many are skipped.
+* *In sync*: targets with nothing missing.
+* *Missing*: declared items not yet in place, across all targets.
+* *Programs*: the managers and tools the targets drive, such as `brew`,
+  `chezmoi` and `mise`, and whether each is on `PATH`.
+* *Coverage*: the share of declared items in place.
+* *Targets table*: each target with its provider, its systems, a bar of what
+  is in place, the live summary, and the result of the last plan made on the
+  page.
+
+== Inventory
+
+The *Inventory* page lists every package, app, dotfile and runtime the config
+declares, read from this machine:
+
+* *Tools*, *Apps*, *Configured* and *Runtimes*: how many of each are in
+  place. Apps are casks, App Store apps and winget packages.
+* *Configured apps*: the programs the dotfiles configure, such as `ghostty`
+  or `zsh`, with their file count. One with a file not in place shows amber.
+* *Everything declared*: one row per item with its state, version, app and
+  description. Search with `/`, sort by column, and export CSV. The name links
+  to the project's homepage when the manager knows it.
+
+`zc-workstation list` prints the same table.
+
+== One target
+
+A target's page shows its live state, the same item table for that target,
+and plans on demand. The plan lists every
+action, and the apply panel takes over from there.
 
 == Apply is deliberate
 
 * Apply needs a plan made on the page first.
 * You type the target's name to confirm.
-* The page plans again before applying and refuses if the result differs
+* The page plans again before applying, and refuses if the result differs
   from what you saw.
-* A plan that deletes is not applied from the page. It shows the terminal
-  command instead, where the deletion prompt runs.
+* A plan that deletes is not applied from the page. The page shows the
+  terminal command instead, where the deletion prompt runs.
+* Installs that need `sudo` or another prompt ask in the terminal that runs
+  `zc-workstation ui`. For apt and dnf targets, applying from a terminal is
+  simpler.
 
 Every plan and apply is recorded on the *Activity* page, in a JSON lines file
 under the user data directory (`-data` changes it).

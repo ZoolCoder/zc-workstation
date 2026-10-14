@@ -8,6 +8,7 @@
 [cols="1,3"]
 |===
 | `status` | Live state per target. Read-only.
+| `list` | Every declared item with its state, version and app. Read-only.
 | `validate` | Check the config offline. Read-only.
 | `plan` | Plan and save it. Returns a `plan_id`. Changes nothing.
 | `apply` | Apply a saved plan by `plan_id`. Refuses when live state moved.

@@ -1,0 +1,114 @@
+= Providers
+:description: What each zc-workstation provider reads, what it runs, and what it leaves to you.
+
+A provider reads the machine and returns actions. It never writes during a
+plan. Each one also counts what is in place, for `status`, `doctor` and the
+dashboard.
+
+[#packages]
+== packages
+
+Installs what a manifest declares. *It never uninstalls*: a package you drop
+from the manifest stays installed, because removing software is your call.
+
+[cols="1,2,2,2"]
+|===
+| Manager | Manifest | Reads installed | Installs with
+
+| `brew`
+| A Brewfile: `tap`, `brew`, `cask` and `mas` entries
+| `brew list --formula`, `brew list --cask`, `brew tap`, `mas list`
+| `brew tap`, `brew install`, `brew install --cask`, `mas install ID`
+
+| `apt`
+| One package per line, `#` comments
+| `dpkg-query`, packages in state `ii`
+| `sudo apt-get install -y`
+
+| `dnf`
+| One package per line, `#` comments
+| `rpm -qa`
+| `sudo dnf install -y`
+
+| `winget`
+| The file `winget export` writes
+| `winget list --id ID --exact`, per package
+| `winget install --id ID --exact --silent`
+|===
+
+For `list` and the Inventory page, versions and descriptions come from
+`brew info --json=v2 --installed` and `mas list` on macOS,
+`dpkg-query` on apt systems, and `rpm -qa` on dnf systems. winget items list
+without them. If the details cannot be read, items still list, without
+versions.
+
+* Taps are installed before the formulae that need them.
+* Other Brewfile entries, such as `vscode` or `go`, are `MANUAL`: the plan
+  names them, and you install them yourself.
+* `mas` entries are `MANUAL` until `mas` is installed.
+* If the manager itself is missing, the plan is one `MANUAL` step to install
+  it.
+* An app installed outside the manager is not seen. Homebrew then refuses to
+  install the cask over it; delete the app or remove the entry.
+
+[#dotfiles]
+== dotfiles
+
+Applies a https://www.chezmoi.io[chezmoi] source directory. Use chezmoi's
+naming (`dot_zshrc`, `private_`, `executable_`, `.tmpl`) and its templates
+for per-machine differences. Its secrets support keeps passwords out of the
+repository.
+
+The plan is `chezmoi status`:
+
+[cols="1,1,3"]
+|===
+| chezmoi | Plan | Meaning
+
+| `A` | `CREATE` | The file is not there yet.
+| `M` | `UPDATE` | The file differs from the source.
+| `D` | `DELETE` | The source removes it, with chezmoi's `remove_` prefix.
+| `R` | `UPDATE` | A `run_` script will run.
+|===
+
+In the inventory each file names the app it configures: the folder under
+`.config`, `.local/share`, `Library/Application Support` or `AppData`, else
+the file's own name (`.zshrc` is `zsh`, `.gitconfig` is `git`).
+
+A file edited since chezmoi last wrote it says so in the plan:
+`changed outside chezmoi, apply overwrites it`. Copy your edit into the source
+first if you want to keep it.
+
+Apply runs `chezmoi apply --force` for exactly the planned paths and their
+parent directories, nothing else. `--force` stands in for chezmoi's own
+overwrite prompt, because you already reviewed the plan.
+
+With `mode: symlink`, each file is a link into the source directory, so an
+edit in place lands in the repository. A file chezmoi must render, such as a
+template or a private file, is still copied.
+
+[#tools]
+== tools
+
+Installs the runtimes a https://mise.jdx.dev[mise] config pins. Only the tools
+declared in that file count. Tools from your global mise config or a parent
+directory's config are ignored.
+
+* The plan lists one `CREATE` per `tool@version` that is not installed, such
+  as `java@temurin-25`.
+* Apply runs `mise install` in the config's directory.
+* In the inventory, each runtime shows the version mise resolved next to the
+  one requested, such as `24.21.0` for `lts`.
+* mise refuses to read a config it does not trust. The plan then shows a
+  `MANUAL` step: read the file, then run `mise trust`.
+
+[#localdir]
+== localdir
+
+Keeps a directory holding the files written inline in the config. Writes go
+through `os.Root`, so a symlink or `..` cannot lead a write outside the
+directory. With `prune`, files the config does not list are deleted, after
+you confirm.
+
+It is useful for a handful of small files, and it is the worked example for
+xref:extending.adoc[writing your own provider].

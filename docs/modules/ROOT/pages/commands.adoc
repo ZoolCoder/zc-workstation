@@ -7,10 +7,11 @@
 
 | `plan` | Read live state and list what would change. The default.
 | `apply [FILE]` | Make the changes, then plan again to verify. With a saved plan, exactly those.
-| `status` | What is live right now, without diffing.
+| `status` | What is in place per target, without diffing. Targets for another system show as skipped.
+| `list` | Every package, app, dotfile and runtime the config declares, one line each: its state, installed version, the app it configures, and a description.
 | `validate` | Check the config offline.
-| `doctor` | Install health: binary, config, each target.
-| `ui` | The admin page.
+| `doctor` | Machine health: binary, system, config, the programs targets need, and each target.
+| `ui` | The xref:ui.adoc[dashboard].
 | `mcp` | The MCP server on standard input and output.
 | `version` | The version.
 |===
@@ -22,10 +23,35 @@
 | `-config FILE` | Config file, or `-` for standard input.
 | `-target NAME` | Limit to this target; repeat for several.
 | `-out FILE` | `plan`: save the plan for `apply FILE`.
-| `-json` | `plan`, `status` and `doctor`: machine-readable.
+| `-json` | `plan`, `status`, `list` and `doctor`: machine-readable.
 | `-exit-code` | `plan`: exit 2 for changes, 3 for manual-only.
 | `-yes` | `apply`: skip the confirmation prompt for deletions.
 |===
+
+== Inventory
+
+[source,console]
+----
+$ zc-workstation list
+TARGET    KIND     NAME                STATE     VERSION   APP       ABOUT
+brew      brew     starship            in place  1.26.0    -         Cross-shell prompt for astronauts
+brew      cask     ghostty             in place  1.3.1     Ghostty   Terminal emulator that uses platform UI and GPU
+brew      cask     google-chrome       missing   -         -         -
+dotfiles  dotfile  .config/ghostty/config  in place  -     ghostty   -
+runtimes  runtime  node                in place  24.21.0   -         requested lts
+----
+
+States are `in place`, `missing`, `differs` (a dotfile that does not match
+its source, or a script still to run) and `manual` (an entry
+`zc-workstation` does not install). Versions and descriptions come from the
+package manager; see xref:providers.adoc[Providers]. A target for another
+system is listed as skipped, one that cannot be read with its error.
+
+== Installs ask in the terminal
+
+Apply runs installers attached to your terminal, so `sudo`, a license prompt
+or an App Store sign-in can ask you. Their output goes to standard error, so
+`-json` output stays parseable.
 
 == Deletions ask first
 
@@ -49,14 +75,21 @@ and without `-yes`, apply is cancelled. Agents never get `-yes`.
 $ zc-workstation plan -json
 {
   "changes": 1,
-  "manual": 0,
+  "manual": 1,
   "actions": [
     {
-      "op": "DELETE",
-      "target": "notes",
-      "resource": "old.txt",
-      "detail": "not in the config",
+      "op": "CREATE",
+      "target": "brew",
+      "resource": "cask:ghostty",
+      "detail": "install with brew",
       "manual": false
+    },
+    {
+      "op": "MANUAL",
+      "target": "runtimes",
+      "resource": "trust",
+      "detail": "mise does not trust /Users/me/dotfiles/mise.toml; review it, then run mise trust /Users/me/dotfiles/mise.toml",
+      "manual": true
     }
   ]
 }

@@ -1,34 +1,73 @@
 = Writing a config
-:description: Every key of the zc-workstation config file.
+:description: Every key of the zc-workstation config file, per provider.
 
 The config is found in this order: `-config`, `$ZC_WORKSTATION_CONFIG`,
 `./zc-workstation.yaml`, then `~/.config/zc-workstation/zc-workstation.yaml`.
 `-config -` reads standard input.
 
+Keep the config in your dotfiles repository next to the manifests it names.
+Relative paths are relative to the config file, and `~` is your home
+directory, so the same file works on every machine.
+
 [source,yaml]
 ----
 version: 1
 targets:
-  - name: notes
-    provider: localdir
-    path: build/notes
-    prune: false
-    files:
-      README.md: |
-        # Notes
+  - name: brew
+    provider: packages
+    os: [darwin]
+    file: packages/Brewfile
+
+  - name: dotfiles
+    provider: dotfiles
+    source: home
+    mode: symlink
+
+  - name: runtimes
+    provider: tools
+    file: mise.toml
 ----
+
+== Every target
 
 [cols="1,3"]
 |===
 | Key | Meaning
 
 | `version` | Always `1`. A future format bumps it.
-| `targets[].name` | Lowercase kebab case, unique. `-target` selects by it.
-| `targets[].provider` | Which provider reconciles it. `localdir` ships.
-| `targets[].path` | The directory, relative to the config file.
-| `targets[].prune` | Also delete files on disk the config does not list.
-| `targets[].files` | File name to content. Names must stay inside the target.
+| `name` | Lowercase kebab case, unique. `-target` selects by it.
+| `provider` | `packages`, `dotfiles`, `tools` or `localdir`.
+| `os` | The systems the target is for: `darwin`, `linux`, `windows`. Empty means every system.
 |===
 
-An unknown key is an error, not a warning: a typo should not silently mean
-the default.
+== Per provider
+
+[cols="1,1,3"]
+|===
+| Provider | Key | Meaning
+
+| `packages` | `file` | Required. The manifest: a Brewfile, a package list, or a winget import file.
+| | `manager` | `brew`, `apt`, `dnf` or `winget`. Empty picks the system's: brew on macOS, winget on Windows, apt on Linux unless only dnf is installed.
+| `dotfiles` | `source` | Required. The chezmoi source directory.
+| | `destination` | Where the files land. Empty means your home directory.
+| | `mode` | `file` copies (the default); `symlink` links back into the source.
+| `tools` | `file` | Required. The mise config file whose tools to install.
+| `localdir` | `path` | Required. The directory to keep.
+| | `files` | File name to content. Names must stay inside `path`.
+| | `prune` | Also delete files in `path` the config does not list.
+|===
+
+xref:providers.adoc[Providers] describes what each one reads and runs.
+
+== Mistakes are errors
+
+An unknown key is an error, not a warning: a typo should not silently mean the
+default. A key a provider ignores, such as `mode` on a `packages` target, is
+an error too. `validate` reports every problem at once:
+
+[source,console]
+----
+$ zc-workstation validate
+zc-workstation.yaml: target brew: manager "pacman" is not one of brew, apt, dnf, winget
+target dotfiles: source is required for provider dotfiles
+----
