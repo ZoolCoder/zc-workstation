@@ -71,6 +71,22 @@ jobs:
           direct=$(go list -m -f '{{if not .Indirect}}{{.Path}}{{end}}' all | tail -n +2 | grep -cv '^$')
           [ "$direct" -eq 2 ] || { echo "::error::expected 2 direct dependencies, found $direct"; exit 1; }
 
+  test-os:
+    # The providers branch on the system: build and test where they run.
+    if: github.base_ref == 'main' || github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: go.mod
+      - run: go vet ./...
+      - run: go test -count=1 ./...
+
   lint:
     if: github.base_ref == 'main' || github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
