@@ -154,10 +154,12 @@ shows. macOS only, so the target needs `os: [darwin]`.
   (`osascript`). If any desktop shows another one, the plan has one `UPDATE`;
   apply sets the picture on every desktop. The first run asks you to let your
   terminal control System Events.
-* *Screen saver.* The plan reads the saver's page list with `defaults read`
-  from its per-host preferences, in the legacy screen saver container. If it
-  lists another page, or none, apply writes the one page with `defaults
-  write`, shown until you return.
+* *Screen saver.* The page, with the fonts and images its CSS loads from its
+  folder inlined, becomes one `data:` URL. The plan compares it with the
+  saver's default page, `WVSSDefaultAddressURL` in the saver's `Info.plist`,
+  read with `plutil`. If they differ, apply writes it there with `plutil` and
+  signs the saver again, ad hoc, with `codesign`. The saver shows its default
+  page while its own list of pages, set in its Options, is empty.
 * If WebViewScreenSaver is not installed, in `~/Library/Screen Savers` or
   `/Library/Screen Savers`, the plan is a `MANUAL` step: run
   `assets/screensaver/build-saver.sh`. It builds the saver from source with
@@ -169,8 +171,10 @@ shows. macOS only, so the target needs `os: [darwin]`.
 * A file that does not exist, such as a wallpaper not rendered yet, is a
   `MANUAL` step.
 
-The saver lets a page read only its own folder, so keep the page's fonts and
-images beside it, and outside Documents, Desktop and Downloads.
+The saver runs sandboxed: it cannot read files outside its bundle, and macOS
+keeps its preferences in a container no terminal may open. That is why the
+page travels inside the saver itself. Query options such as `?light` do not
+reach a `data:` URL, so the saver shows the page's default, dark look.
 
 [#localdir]
 == localdir

@@ -84,8 +84,10 @@ xref:providers.adoc#desktop[desktop provider] sets it:
   displays.
 * `assets/screensaver/index.html` is the screen saver: the orbits turn, the
   stars twinkle, and a clock shows the time and date. The scene drifts slowly
-  so nothing stays in one place. Add `?light` for paper, or `?still` for no
-  motion; the system's reduced motion setting also stops it.
+  so nothing stays in one place. In a browser, add `?light` for paper, or
+  `?still` for no motion; the system's reduced motion setting also stops it.
+  `assets/screensaver/build-saver.sh` builds and installs the saver that
+  shows it.
 
 == Local only
 

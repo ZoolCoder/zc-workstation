@@ -1,12 +1,15 @@
-// Package desktop sets the macOS desktop picture and points the
-// WebViewScreenSaver screen saver at a web page. System Events sets the
-// picture; the saver's own preferences, written with defaults, hold the page.
+// Package desktop sets the macOS desktop picture and the page the
+// WebViewScreenSaver screen saver shows. System Events sets the picture. The
+// page goes into the saver's own Info.plist as its default address, because
+// macOS keeps the saver's preferences in a container no terminal may open, and
+// the sandboxed saver cannot read files outside its bundle.
 package desktop
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
-	"net/url"
+	"mime"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -22,6 +25,10 @@ import (
 // installed by assets/screensaver/build-saver.sh.
 const Saver = "WebViewScreenSaver.saver"
 
+// defaultURLKey is the Info.plist key holding the page the saver shows while
+// its own list of pages is empty.
+const defaultURLKey = "WVSSDefaultAddressURL"
+
 type Provider struct {
 	r sh.Runner
 	// home holds Library; Saver may also sit in system, the shared Library.
@@ -36,9 +43,9 @@ func New(r sh.Runner) Provider {
 // look is what the machine shows now, for each key the target sets.
 type look struct {
 	wallpaper, screensaver state
-	// prefs is the saver's preference file, without .plist, as defaults
-	// takes it.
-	prefs string
+	// saver is the installed saver bundle, and page the page as a data URL,
+	// when the screensaver key is set.
+	saver, page string
 }
 
 // state is one key's reading: its item state and what to say about it.
@@ -61,11 +68,11 @@ func (p Provider) read(ctx context.Context, t config.Target) (look, error) {
 		l.wallpaper = s
 	}
 	if t.Screensaver != "" {
-		s, prefs, err := p.readScreensaver(ctx, t.Screensaver)
+		s, saver, page, err := p.readScreensaver(ctx, t.Screensaver)
 		if err != nil {
 			return l, err
 		}
-		l.screensaver, l.prefs = s, prefs
+		l.screensaver, l.saver, l.page = s, saver, page
 	}
 	return l, nil
 }
@@ -91,55 +98,74 @@ func (p Provider) readWallpaper(ctx context.Context, want string) (state, error)
 	return state{set: true, state: provider.InPlace, detail: "on every desktop"}, nil
 }
 
-var (
-	platformUUID = regexp.MustCompile(`"IOPlatformUUID" = "([0-9A-F-]+)"`)
-	savedURL     = regexp.MustCompile(`kScreenSaverURL = "?([^";]+)"?;`)
-)
-
-func (p Provider) readScreensaver(ctx context.Context, page string) (state, string, error) {
-	if _, err := os.Stat(page); err != nil {
-		return state{set: true, state: provider.Missing, detail: "no page at " + page}, "", nil
+func (p Provider) readScreensaver(ctx context.Context, path string) (state, string, string, error) {
+	if _, err := os.Stat(path); err != nil {
+		return state{set: true, state: provider.Missing, detail: "no page at " + path}, "", "", nil
 	}
-	if !p.saverInstalled() {
+	saver := p.installedSaver()
+	if saver == "" {
 		return state{set: true, state: provider.Missing, resource: "webviewscreensaver",
-			detail: "install the saver: run assets/screensaver/build-saver.sh from zc-workstation (needs Xcode)"}, "", nil
+			detail: "install the saver: run assets/screensaver/build-saver.sh from zc-workstation (needs Xcode)"}, "", "", nil
 	}
-	out, err := p.r.Output(ctx, "ioreg", "-rd1", "-c", "IOPlatformExpertDevice")
+	page, err := dataURL(path)
 	if err != nil {
-		return state{}, "", fmt.Errorf("read hardware UUID: %w", err)
+		return state{}, "", "", err
 	}
-	m := platformUUID.FindSubmatch(out)
-	if m == nil {
-		return state{}, "", fmt.Errorf("read hardware UUID: no IOPlatformUUID in ioreg output")
+	// A fresh build holds the upstream default address, so it differs.
+	out, err := p.r.Output(ctx, "plutil", "-extract", defaultURLKey, "raw", "-o", "-", infoPlist(saver))
+	if err == nil && strings.TrimSpace(string(out)) == page {
+		return state{set: true, state: provider.InPlace, detail: "WebViewScreenSaver shows it"}, saver, page, nil
 	}
-	// The saver runs inside the legacy screen saver host, whose container
-	// holds its per-host preferences.
-	prefs := filepath.Join(p.home, "Library/Containers/com.apple.ScreenSaver.Engine.legacyScreenSaver/Data/Library/Preferences/ByHost",
-		"WebViewScreenSaver."+string(m[1]))
-	out, err = p.r.Output(ctx, "defaults", "read", prefs, "kScreenSaverURLList")
-	if err != nil {
-		if strings.Contains(err.Error(), "not found") || strings.Contains(err.Error(), "does not exist") {
-			return state{set: true, state: provider.Differs, detail: "WebViewScreenSaver shows no page yet"}, prefs, nil
-		}
-		return state{}, "", fmt.Errorf("read WebViewScreenSaver settings: %w", err)
-	}
-	urls := savedURL.FindAllSubmatch(out, -1)
-	if len(urls) == 1 && string(urls[0][1]) == fileURL(page) {
-		return state{set: true, state: provider.InPlace, detail: "WebViewScreenSaver shows it"}, prefs, nil
-	}
-	return state{set: true, state: provider.Differs, detail: "WebViewScreenSaver shows another page"}, prefs, nil
+	return state{set: true, state: provider.Differs, detail: "WebViewScreenSaver shows another page"}, saver, page, nil
 }
 
-func (p Provider) saverInstalled() bool {
+func infoPlist(saver string) string { return filepath.Join(saver, "Contents/Info.plist") }
+
+func (p Provider) installedSaver() string {
 	for _, lib := range []string{filepath.Join(p.home, "Library"), p.system} {
-		if _, err := os.Stat(filepath.Join(lib, "Screen Savers", Saver)); err == nil {
-			return true
+		saver := filepath.Join(lib, "Screen Savers", Saver)
+		if info, err := os.Stat(saver); err == nil && info.IsDir() {
+			return saver
 		}
 	}
-	return false
+	return ""
 }
 
-func fileURL(path string) string { return (&url.URL{Scheme: "file", Path: path}).String() }
+// localRef is a relative url() in the page's CSS, such as a font beside it.
+var localRef = regexp.MustCompile(`url\(([\w./-]+\.\w+)\)`)
+
+// dataURL is the page as one data URL, with the files its CSS loads from its
+// folder inlined, so the saver needs no file access.
+func dataURL(path string) (string, error) {
+	page, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+	var readErr error
+	page = localRef.ReplaceAllFunc(page, func(ref []byte) []byte {
+		name := string(localRef.FindSubmatch(ref)[1])
+		b, err := os.ReadFile(filepath.Join(filepath.Dir(path), name))
+		if err != nil {
+			readErr = err
+			return ref
+		}
+		return []byte("url(data:" + mediaType(name) + ";base64," + base64.StdEncoding.EncodeToString(b) + ")")
+	})
+	if readErr != nil {
+		return "", fmt.Errorf("inline into %s: %w", filepath.Base(path), readErr)
+	}
+	return "data:text/html;base64," + base64.StdEncoding.EncodeToString(page), nil
+}
+
+func mediaType(name string) string {
+	if filepath.Ext(name) == ".woff2" {
+		return "font/woff2"
+	}
+	if t := mime.TypeByExtension(filepath.Ext(name)); t != "" {
+		return t
+	}
+	return "application/octet-stream"
+}
 
 // Plan sets what differs. A missing file or saver is MANUAL: rendering art and
 // installing software are steps a person takes.
@@ -165,12 +191,14 @@ func (p Provider) Plan(ctx context.Context, t config.Target) ([]plan.Action, err
 	case provider.Missing:
 		actions = append(actions, manual(t, "screensaver", l.screensaver))
 	case provider.Differs:
-		entry := "<dict><key>kScreenSaverURL</key><string>" + fileURL(t.Screensaver) + "</string>" +
-			"<key>kScreenSaverTime</key><integer>-1</integer></dict>"
 		actions = append(actions, plan.Action{Op: plan.OpUpdate, Target: t.Name, Resource: "screensaver",
 			Detail: "show " + filepath.Base(t.Screensaver) + " in WebViewScreenSaver; pick it once in System Settings, Screen Saver",
 			Do: func(ctx context.Context) error {
-				return p.r.Run(ctx, "defaults", "write", l.prefs, "kScreenSaverURLList", "-array", entry)
+				if err := p.r.Run(ctx, "plutil", "-replace", defaultURLKey, "-string", l.page, infoPlist(l.saver)); err != nil {
+					return err
+				}
+				// Editing Info.plist breaks the bundle's seal; sign it again, ad hoc as built.
+				return p.r.Run(ctx, "codesign", "--force", "--sign", "-", l.saver)
 			}})
 	}
 	return actions, nil
@@ -228,7 +256,7 @@ func (Provider) Programs(t config.Target) []string {
 		progs = append(progs, "osascript")
 	}
 	if t.Screensaver != "" {
-		progs = append(progs, "defaults", "ioreg")
+		progs = append(progs, "plutil", "codesign")
 	}
 	return progs
 }

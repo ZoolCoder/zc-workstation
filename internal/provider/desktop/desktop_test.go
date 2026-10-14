@@ -2,7 +2,7 @@ package desktop
 
 import (
 	"context"
-	"errors"
+	"encoding/base64"
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,18 +13,16 @@ import (
 	"github.com/zoolcoder/zc-workstation/internal/sh"
 )
 
-const uuid = "CE085635-0000-0000-0000-000000000000"
-
 type machine struct {
 	p      Provider
 	r      *sh.Fake
 	t      config.Target
-	prefs  string
+	saver  string
 	readSS string
 }
 
-// setup is a machine with the wallpaper and page on disk, the saver
-// installed when saver is true, and nothing pointed at either yet.
+// setup is a machine with the wallpaper, and a page loading a font, on disk;
+// the saver installed when saver is true; and nothing pointed at either yet.
 func setup(t *testing.T, saver bool) machine {
 	t.Helper()
 	root := t.TempDir()
@@ -36,26 +34,35 @@ func setup(t *testing.T, saver bool) machine {
 	}
 	tg := config.Target{Name: "look", Provider: "desktop", OS: []string{"darwin"},
 		Wallpaper: filepath.Join(art, "wall.png"), Screensaver: filepath.Join(art, "index.html")}
-	for _, f := range []string{tg.Wallpaper, tg.Screensaver} {
-		if err := os.WriteFile(f, nil, 0o600); err != nil {
+	files := map[string]string{tg.Wallpaper: "", tg.Screensaver: "<style>@font-face{src:url(fonts/a.woff2)}</style>",
+		filepath.Join(art, "fonts/a.woff2"): "FONT"}
+	for f, body := range files {
+		if err := os.MkdirAll(filepath.Dir(f), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(f, []byte(body), 0o600); err != nil {
 			t.Fatal(err)
 		}
 	}
+	saverDir := filepath.Join(home, "Library/Screen Savers", Saver)
 	if saver {
-		if err := os.Mkdir(filepath.Join(home, "Library/Screen Savers", Saver), 0o755); err != nil {
+		if err := os.MkdirAll(filepath.Join(saverDir, "Contents"), 0o755); err != nil {
 			t.Fatal(err)
 		}
 	}
-	prefs := filepath.Join(home, "Library/Containers/com.apple.ScreenSaver.Engine.legacyScreenSaver/Data/Library/Preferences/ByHost/WebViewScreenSaver."+uuid)
-	readSS := sh.Line("defaults", "read", prefs, "kScreenSaverURLList")
-	r := &sh.Fake{
-		Out: map[string]string{
-			sh.Line("osascript", "-e", pictures):                     "/System/Library/Desktop Pictures/Sky.heic\n" + tg.Wallpaper + "\n",
-			sh.Line("ioreg", "-rd1", "-c", "IOPlatformExpertDevice"): `  "IOPlatformUUID" = "` + uuid + `"` + "\n",
-		},
-		Err: map[string]error{readSS: errors.New("Domain " + prefs + " not found.")},
-	}
-	return machine{Provider{r: r, home: home, system: filepath.Join(root, "system")}, r, tg, prefs, readSS}
+	readSS := sh.Line("plutil", "-extract", defaultURLKey, "raw", "-o", "-", filepath.Join(saverDir, "Contents/Info.plist"))
+	r := &sh.Fake{Out: map[string]string{
+		sh.Line("osascript", "-e", pictures): "/System/Library/Desktop Pictures/Sky.heic\n" + tg.Wallpaper + "\n",
+		readSS:                               "http://www.google.com/\n",
+	}}
+	return machine{Provider{r: r, home: home, system: filepath.Join(root, "system")}, r, tg, saverDir, readSS}
+}
+
+// page is what the saver should hold for setup's page: the page as a data URL,
+// its font inlined.
+func page() string {
+	html := "<style>@font-face{src:url(data:font/woff2;base64," + base64.StdEncoding.EncodeToString([]byte("FONT")) + ")}</style>"
+	return "data:text/html;base64," + base64.StdEncoding.EncodeToString([]byte(html))
 }
 
 func TestPlanSetsWallpaperAndPointsTheSaver(t *testing.T) {
@@ -75,8 +82,8 @@ func TestPlanSetsWallpaperAndPointsTheSaver(t *testing.T) {
 	}
 	want := []string{
 		sh.Line("osascript", "-e", "on run argv", "-e", `tell application "System Events" to set picture of every desktop to POSIX file (item 1 of argv)`, "-e", "end run", m.t.Wallpaper),
-		sh.Line("defaults", "write", m.prefs, "kScreenSaverURLList", "-array",
-			"<dict><key>kScreenSaverURL</key><string>file://"+strings.ReplaceAll(m.t.Screensaver, " ", "%20")+"</string><key>kScreenSaverTime</key><integer>-1</integer></dict>"),
+		sh.Line("plutil", "-replace", defaultURLKey, "-string", page(), filepath.Join(m.saver, "Contents/Info.plist")),
+		sh.Line("codesign", "--force", "--sign", "-", m.saver),
 	}
 	if strings.Join(m.r.Ran, "\n") != strings.Join(want, "\n") {
 		t.Fatalf("ran\n%s", strings.Join(m.r.Ran, "\n"))
@@ -86,8 +93,7 @@ func TestPlanSetsWallpaperAndPointsTheSaver(t *testing.T) {
 func TestInPlaceWhenEveryDesktopAndTheSaverMatch(t *testing.T) {
 	m := setup(t, true)
 	m.r.Out[sh.Line("osascript", "-e", pictures)] = m.t.Wallpaper + "\n" + m.t.Wallpaper + "\n"
-	delete(m.r.Err, m.readSS)
-	m.r.Out[m.readSS] = "(\n    {\n        kScreenSaverTime = \"-1\";\n        kScreenSaverURL = \"" + fileURL(m.t.Screensaver) + "\";\n    }\n)\n"
+	m.r.Out[m.readSS] = page() + "\n"
 	ctx := context.Background()
 	if actions, err := m.p.Plan(ctx, m.t); err != nil || len(actions) != 0 {
 		t.Fatalf("plan %+v %v", actions, err)
@@ -115,11 +121,13 @@ func TestMissingSaverOrFilesAreManual(t *testing.T) {
 
 func TestSystemWideSaverCounts(t *testing.T) {
 	m := setup(t, false)
-	if err := os.MkdirAll(filepath.Join(m.p.system, "Screen Savers", Saver), 0o755); err != nil {
+	saver := filepath.Join(m.p.system, "Screen Savers", Saver)
+	if err := os.MkdirAll(saver, 0o755); err != nil {
 		t.Fatal(err)
 	}
+	m.r.Out[sh.Line("plutil", "-extract", defaultURLKey, "raw", "-o", "-", filepath.Join(saver, "Contents/Info.plist"))] = page()
 	items, err := m.p.Items(context.Background(), m.t)
-	if err != nil || len(items) != 2 || items[1].Kind != "screensaver" || items[1].State != "differs" {
+	if err != nil || len(items) != 2 || items[1].Kind != "screensaver" || items[1].State != "in place" {
 		t.Fatalf("items %+v %v", items, err)
 	}
 }
