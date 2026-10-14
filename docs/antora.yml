@@ -1,0 +1,6 @@
+name: zc-workstation
+title: zc-workstation
+version: ~
+start_page: ROOT:index.adoc
+nav:
+  - modules/ROOT/nav.adoc

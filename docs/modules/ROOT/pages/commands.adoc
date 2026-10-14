@@ -1,0 +1,63 @@
+= Commands
+:description: Every zc-workstation command, flag and exit code.
+
+[cols="1,3"]
+|===
+| Command | What it does
+
+| `plan` | Read live state and list what would change. The default.
+| `apply [FILE]` | Make the changes, then plan again to verify. With a saved plan, exactly those.
+| `status` | What is live right now, without diffing.
+| `validate` | Check the config offline.
+| `doctor` | Install health: binary, config, each target.
+| `ui` | The admin page.
+| `mcp` | The MCP server on standard input and output.
+| `version` | The version.
+|===
+
+== Flags
+
+[cols="1,3"]
+|===
+| `-config FILE` | Config file, or `-` for standard input.
+| `-target NAME` | Limit to this target; repeat for several.
+| `-out FILE` | `plan`: save the plan for `apply FILE`.
+| `-json` | `plan`, `status` and `doctor`: machine-readable.
+| `-exit-code` | `plan`: exit 2 for changes, 3 for manual-only.
+| `-yes` | `apply`: skip the confirmation prompt for deletions.
+|===
+
+== Deletions ask first
+
+A plan with a `DELETE` stops and asks you to type `yes`. Without a terminal,
+and without `-yes`, apply is cancelled. Agents never get `-yes`.
+
+== Exit codes
+
+[cols="1,3"]
+|===
+| `0` | Nothing to do, or the apply converged and was verified.
+| `1` | Something failed.
+| `2` | With `-exit-code`: changes are outstanding.
+| `3` | With `-exit-code`: nothing left but `MANUAL` items.
+|===
+
+== JSON
+
+[source,console]
+----
+$ zc-workstation plan -json
+{
+  "changes": 1,
+  "manual": 0,
+  "actions": [
+    {
+      "op": "DELETE",
+      "target": "notes",
+      "resource": "old.txt",
+      "detail": "not in the config",
+      "manual": false
+    }
+  ]
+}
+----

@@ -1,0 +1,9 @@
+# Every change is reviewed by the maintainer. Skills and credential-handling
+# code are listed explicitly so a future co-maintainer can take a subtree.
+*                   @ZoolCoder
+/skills/            @ZoolCoder
+/hooks/             @ZoolCoder
+/internal/ui/       @ZoolCoder
+/cmd/zc-workstation/ @ZoolCoder
+/SECURITY.md        @ZoolCoder
+/.github/           @ZoolCoder

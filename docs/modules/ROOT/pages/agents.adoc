@@ -1,0 +1,39 @@
+= Agents and MCP
+:description: The zc-workstation MCP server, Claude Code plugin, skills and adapters for other agents.
+
+== MCP server
+
+`zc-workstation mcp` serves these tools over standard input and output:
+
+[cols="1,3"]
+|===
+| `status` | Live state per target. Read-only.
+| `validate` | Check the config offline. Read-only.
+| `plan` | Plan and save it. Returns a `plan_id`. Changes nothing.
+| `apply` | Apply a saved plan by `plan_id`. Refuses when live state moved.
+| `doctor` | Install health. Read-only.
+|===
+
+`apply` takes only the id of a plan the server saved, never a plan body. A
+plan that deletes is cancelled and the reply names the terminal command for
+the user to run.
+
+== Claude Code plugin
+
+The repository is a plugin: `skills/`, `commands/`, `hooks/` and `.mcp.json`.
+
+[source,console]
+----
+$ claude plugin marketplace add zoolcoder/zc-workstation
+$ claude plugin install zc-workstation
+----
+
+* `setup` installs the binary, writes a config and runs `doctor`.
+* `plan-apply` plans, explains, asks for a yes, and applies that plan by id.
+* The `PreToolUse` hook asks before any `apply` with `-yes` or without a
+  saved plan file.
+
+== Other agents
+
+`adapters/` holds the same rules for Codex, Cursor, Gemini CLI, Copilot and
+cloud agents.

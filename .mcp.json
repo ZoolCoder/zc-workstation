@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "zc-workstation": {
+      "command": "zc-workstation",
+      "args": ["mcp"]
+    }
+  }
+}

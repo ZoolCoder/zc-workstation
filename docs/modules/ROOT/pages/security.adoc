@@ -1,0 +1,22 @@
+= Threat model
+:description: What zc-workstation protects against, and what it does not.
+
+== What it protects
+
+* *Writes stay inside a target.* `localdir` writes through `os.Root`: a
+  symlink or `..` cannot lead a write out of the directory.
+* *Nothing is applied that was not shown.* A saved plan refuses to apply when
+  live state moved. The admin page plans again before applying.
+* *Deletions need a person.* The CLI asks, the page sends you to the
+  terminal, and the MCP server cancels.
+* *The admin page stays local.* Loopback only, `Host` checked against DNS
+  rebinding, cross-site writes refused, strict CSP.
+
+== What it does not
+
+* A config you did not write. It can name any directory you can write to.
+  Review it as you would a script.
+* An attacker who already has your shell.
+
+Report a problem through xref:index.adoc[the repository's] security policy,
+never a public issue.

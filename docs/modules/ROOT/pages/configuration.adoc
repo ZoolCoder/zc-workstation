@@ -1,0 +1,34 @@
+= Writing a config
+:description: Every key of the zc-workstation config file.
+
+The config is found in this order: `-config`, `$ZC_WORKSTATION_CONFIG`,
+`./zc-workstation.yaml`, then `~/.config/zc-workstation/zc-workstation.yaml`.
+`-config -` reads standard input.
+
+[source,yaml]
+----
+version: 1
+targets:
+  - name: notes
+    provider: localdir
+    path: build/notes
+    prune: false
+    files:
+      README.md: |
+        # Notes
+----
+
+[cols="1,3"]
+|===
+| Key | Meaning
+
+| `version` | Always `1`. A future format bumps it.
+| `targets[].name` | Lowercase kebab case, unique. `-target` selects by it.
+| `targets[].provider` | Which provider reconciles it. `localdir` ships.
+| `targets[].path` | The directory, relative to the config file.
+| `targets[].prune` | Also delete files on disk the config does not list.
+| `targets[].files` | File name to content. Names must stay inside the target.
+|===
+
+An unknown key is an error, not a warning: a typo should not silently mean
+the default.

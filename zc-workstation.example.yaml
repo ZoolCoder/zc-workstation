@@ -1,0 +1,20 @@
+# zc-workstation config. Copy to zc-workstation.yaml (ignored by git) or
+# ~/.config/zc-workstation/zc-workstation.yaml, then run
+# `zc-workstation plan`.
+version: 1
+
+targets:
+  # localdir keeps a directory holding exactly these files. Paths are relative
+  # to this config file's directory.
+  - name: notes
+    provider: localdir
+    path: build/notes
+    # prune: true also deletes files on disk that are not listed here. A plan
+    # that deletes always asks before applying.
+    prune: false
+    files:
+      README.md: |
+        # Notes
+        Managed by zc-workstation; edit the config, not this file.
+      todo/today.md: |
+        - write the provider for the real system

@@ -1,0 +1,32 @@
+= What zc-workstation is
+:description: A declarative reconcile tool: one YAML file says what should exist, the tool plans, applies and verifies.
+
+One file says what should exist. `zc-workstation` reads what exists now,
+prints the difference, and only if you ask, closes it.
+
+[source,console]
+----
+$ zc-workstation plan
+CREATE  notes  README.md      new file, 69 bytes
+CREATE  notes  todo/today.md  new file, 41 bytes
+----
+
+== The loop
+
+. *Plan* reads live state through a provider and lists actions: `CREATE`,
+  `UPDATE`, `DELETE` and `MANUAL`. Planning writes nothing.
+. *Apply* runs the actions, then plans again. A change the target accepted but
+  did not keep is reported as still outstanding, never as done.
+. *Saved plans* pin what was reviewed: `plan -out` writes it, `apply FILE`
+  refuses when live state moved since.
+
+== Four surfaces, one contract
+
+The CLI is the contract. The admin page, the MCP server, the agent skills and
+scripts all go through the same plan and apply, with the same refusals.
+
+== What it ships with
+
+One provider, `localdir`, which keeps a directory holding exactly the files
+the config lists. It is the worked example for
+xref:extending.adoc[writing your own].

@@ -1,0 +1,58 @@
+= Getting started
+:description: Install zc-workstation, write a config, plan and apply.
+
+== Install
+
+[tabs]
+====
+Homebrew::
++
+[source,console]
+----
+$ brew tap zoolcoder/zc-workstation https://github.com/zoolcoder/zc-workstation
+$ brew install --cask zc-workstation
+----
+
+Go::
++
+[source,console,subs=attributes+]
+----
+$ go install github.com/zoolcoder/zc-workstation/cmd/zc-workstation@latest
+----
++
+Needs Go {go-version} or later.
+====
+
+== Write a config
+
+Copy `zc-workstation.example.yaml` to `zc-workstation.yaml` and edit it.
+xref:configuration.adoc[Writing a config] lists every key.
+
+[source,console]
+----
+$ zc-workstation validate
+zc-workstation.yaml: 1 target(s), valid
+----
+
+== Plan, then apply
+
+[source,console]
+----
+$ zc-workstation plan -out plan.json
+CREATE  notes  README.md      new file, 69 bytes
+CREATE  notes  todo/today.md  new file, 41 bytes
+$ zc-workstation apply plan.json
+done  CREATE notes README.md
+done  CREATE notes todo/today.md
+applied and verified
+----
+
+== Check the install
+
+[source,console]
+----
+$ zc-workstation doctor
+ok    binary        /opt/homebrew/bin/zc-workstation (PATH: /opt/homebrew/bin/zc-workstation)
+ok    config        zc-workstation.yaml, 1 target(s)
+ok    target notes  2 of 2 declared files in place, 2 files on disk
+----
