@@ -73,7 +73,7 @@ func TestBrewPlanInstallsWhatIsMissing(t *testing.T) {
 		}
 	}
 	ran := strings.Join(r.Ran, "\n")
-	if ran != "brew tap hashicorp/tap\nbrew install --cask ghostty\nmas install 6745342698" {
+	if ran != "brew tap hashicorp/tap\nbrew trust hashicorp/tap\nbrew install --cask ghostty\nmas install 6745342698" {
 		t.Fatalf("ran\n%s", ran)
 	}
 }

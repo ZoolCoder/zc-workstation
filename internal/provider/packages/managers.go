@@ -28,7 +28,13 @@ var managers = map[string]manager{
 		install: func(r sh.Runner, i item) func(context.Context) error {
 			switch i.Kind {
 			case "tap":
-				return run(r, "brew", "tap", i.Name)
+				// Homebrew loads a third-party tap's formulae only once it is trusted.
+				return func(ctx context.Context) error {
+					if err := r.Run(ctx, "brew", "tap", i.Name); err != nil {
+						return err
+					}
+					return r.Run(ctx, "brew", "trust", i.Name)
+				}
 			case "cask":
 				return run(r, "brew", "install", "--cask", i.Name)
 			case "mas":
