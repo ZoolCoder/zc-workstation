@@ -157,9 +157,17 @@ zc-workstation/
 |Not started
 |macOS `defaults`, launchd agents; later systemd timers and Task Scheduler.
 
-|Move aurora-mac config into `home/`
+|`list`, `capture`, upgrades
+|Done
+|`list` shows outdated and undeclared packages and runtimes in about two seconds. `capture` writes a Brewfile, package list or mise config from the machine. `upgrade: true` plans upgrades per target.
+
+|aurora-mac links as chezmoi source
+|Done
+|aurora-mac's private repo has a `home/` source with one `symlink_` entry per `link` line in `install.sh`, 29 in all. On this Mac the plan reads 29 of 29 in place with no changes, and an apply to an empty home rebuilds every link. The config stays in aurora-mac, private, so nothing personal enters this repo.
+
+|aurora-mac steps beyond links
 |Not started
-|Needs the dotfiles repo layout decided. Until then aurora-mac keeps managing the Macs.
+|`install.sh` also seeds btop and k9s configs, imports CodexBar preferences, sets the git identity, hooks and signing key, merges VS Code settings, copies IntelliJ options, edits `gradle.properties`, renders wallpapers, fills in launchd jobs and runs `macos.sh`. These belong to the `settings` and `services` providers or to chezmoi `run_onchange_` scripts.
 
 |CI on macOS, Linux and Windows runners
 |Configured
