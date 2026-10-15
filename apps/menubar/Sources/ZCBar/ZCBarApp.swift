@@ -19,6 +19,7 @@ struct ZCBarApp: App {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     let store = Store()
     private lazy var window = PanelWindow(store: store)
+    private lazy var hotkey = HotKey { [weak self] in self?.window.toggle() }
 
     /// SwiftUI takes URL events for itself, so the handler replaces its own
     /// once launched: zcbar://panel, from SketchyBar's item, toggles the
@@ -27,14 +28,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSAppleEventManager.shared().setEventHandler(self, andSelector: #selector(open(_:reply:)),
                                                      forEventClass: AEEventClass(kInternetEventClass),
                                                      andEventID: AEEventID(kAEGetURL))
+        store.notifier.onOpen = { [weak self] in self?.window.show() }
+        store.hotkeyChanged = { [weak self] on in on ? self?.hotkey.register() : self?.hotkey.unregister() }
+        if store.hotkey { hotkey.register() }
         Task { await store.start() }
     }
 
     @objc private func open(_ event: NSAppleEventDescriptor, reply: NSAppleEventDescriptor) {
-        let url = event.paramDescriptor(forKeyword: keyDirectObject)?.stringValue.flatMap(URL.init(string:))
-        if url?.host() == "panel" {
+        guard let url = event.paramDescriptor(forKeyword: keyDirectObject)?.stringValue.flatMap(URL.init(string:)),
+              url.host() == "panel" else { return }
+        // zcbar://panel/updates opens a tab, zcbar://panel/overview/home a target in it.
+        let parts = url.pathComponents.filter { $0 != "/" }
+        guard let name = parts.first, let tab = Store.Tab.allCases.first(where: { $0.rawValue.lowercased() == name }) else {
             window.toggle()
+            return
         }
+        store.tab = tab
+        if parts.count > 1, store.expanded != parts[1] { store.toggle(parts[1]) }
+        window.show()
     }
 
     func applicationWillTerminate(_ notification: Notification) {

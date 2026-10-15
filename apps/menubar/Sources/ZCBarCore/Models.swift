@@ -86,6 +86,9 @@ public struct Item: Decodable, Sendable, Equatable, Identifiable {
     public var version: String?
     public var latest: String?
     public var desc: String?
+    public var app: String?
+    /// The comment the config gives the entry.
+    public var why: String?
     /// The target the item belongs to; list -json gives it per group.
     public var target: String?
 
@@ -97,12 +100,24 @@ public struct Item: Decodable, Sendable, Equatable, Identifiable {
         self.latest = latest
     }
 
-    /// The name a plan gives the item's change, for `-only`. A runtime's
-    /// change is named for the version the config asks for, which list does
-    /// not give, so a runtime has none.
     public var resource: String { kind + ":" + name }
-    public var planResource: String? { kind == "runtime" ? nil : resource }
     public var id: String { resource }
+
+    /// The names a plan may give the item's change, for `-only`: a package
+    /// is kind:name, a file or setting its name, a runtime name@request.
+    public var planNames: [String] {
+        var names = [resource, name]
+        if kind == "runtime", let d = desc, d.hasPrefix("requested ") {
+            names.append(name + "@" + d.dropFirst("requested ".count))
+        }
+        return names
+    }
+
+    public var isFixable: Bool { state == "missing" || state == "differs" }
+
+    /// A brew service or launch agent that is up: started, or loaded and
+    /// waiting for its schedule.
+    public var isRunning: Bool { ["started", "loaded", "scheduled"].contains(desc ?? "") }
 }
 
 /// `plan -json`.

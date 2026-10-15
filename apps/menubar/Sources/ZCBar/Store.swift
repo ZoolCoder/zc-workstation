@@ -30,6 +30,17 @@ final class Store {
         }
     }
 
+    var tab: Tab = .overview
+    /// The target whose items the overview shows, and what they are.
+    var expanded: String?
+    var targetItems: [String: [Item]] = [:]
+    /// Launch agents that run on a calendar, such as the weekly upkeep.
+    var jobs: [Job] = []
+
+    enum Tab: String, CaseIterable {
+        case overview = "Overview", updates = "Updates", health = "Health", services = "Services"
+    }
+
     struct Message: Equatable {
         var text: String
         var failed: Bool
@@ -39,6 +50,8 @@ final class Store {
     private enum Keys {
         static let config = "configPath"
         static let ignored = "ignoredChecks"
+        static let notifies = "notifies"
+        static let hotkey = "hotkey"
     }
 
     private var workstation: Workstation?
@@ -46,9 +59,30 @@ final class Store {
     private var dashboard: Process?
     private var ticker: Task<Void, Never>?
     private let planFile = FileManager.default.temporaryDirectory.appendingPathComponent("zcbar-plan.json").path
+    let notifier = Notifier()
+    /// Set by the app delegate, which owns the hotkey.
+    var hotkeyChanged: ((Bool) -> Void)?
 
     init() {
         ignored = Set(UserDefaults.standard.stringArray(forKey: Keys.ignored) ?? [])
+        UserDefaults.standard.register(defaults: [Keys.notifies: true, Keys.hotkey: true])
+        notifies = UserDefaults.standard.bool(forKey: Keys.notifies)
+        hotkey = UserDefaults.standard.bool(forKey: Keys.hotkey)
+    }
+
+    var notifies: Bool {
+        didSet {
+            UserDefaults.standard.set(notifies, forKey: Keys.notifies)
+            if notifies { Task { await notifier.authorize() } }
+        }
+    }
+
+    /// ⌃⌥Z opens the panel from anywhere.
+    var hotkey: Bool {
+        didSet {
+            UserDefaults.standard.set(hotkey, forKey: Keys.hotkey)
+            hotkeyChanged?(hotkey)
+        }
     }
 
     var attention: Int { snapshot?.attention(ignoring: ignored) ?? 0 }
@@ -59,6 +93,7 @@ final class Store {
     // MARK: Refresh
 
     func start() async {
+        if notifies { await notifier.authorize() }
         await connect()
         ticker = Task { [weak self] in
             while !Task.isCancelled {
@@ -89,9 +124,17 @@ final class Store {
     func refresh() async {
         guard let workstation, !refreshing else { return }
         refreshing = true
-        snapshot = await workstation.snapshot()
+        let old = snapshot
+        let new = await workstation.snapshot()
+        snapshot = new
         refreshedAt = .now
+        jobs = await readJobs(new.services)
+        targetItems = [:]
+        if let expanded { await loadItems(expanded) }
         refreshing = false
+        // The first read has nothing to compare with: what is already
+        // outstanding at launch is the badge's to show.
+        if notifies, let old { notifier.post(new.alerts(since: old, ignoring: ignored)) }
     }
 
     /// Opening the menu reads again once the last read is a few minutes old.
@@ -111,27 +154,60 @@ final class Store {
         Task { await connect() }
     }
 
+    // MARK: Targets
+
+    /// Opens or closes a target's list of what is not in place.
+    func toggle(_ target: String) {
+        expanded = expanded == target ? nil : target
+        if let expanded, targetItems[expanded] == nil { Task { await loadItems(expanded) } }
+    }
+
+    func loadItems(_ target: String) async {
+        guard let workstation else { return }
+        do {
+            targetItems[target] = try await workstation.items(targets: [target], states: ["missing", "differs", "manual"])
+        } catch {
+            message = Message(text: error.localizedDescription, failed: true)
+        }
+    }
+
     // MARK: Changes
 
-    /// Upgrades one package, which its Update button already asked for. A
-    /// runtime cannot be picked out of a plan, so its whole target upgrades,
-    /// after a confirmation that lists what.
+    /// Upgrades one package, which its Update button already asked for.
     func update(_ item: Item) async {
-        let only = item.planResource.map { [$0] } ?? []
-        let targets = only.isEmpty ? [item.target].compactMap { $0 } : []
-        await change("Updating \(item.name)", confirm: only.isEmpty) {
-            try await $0.plan(upgrade: true, targets: targets, only: only, savingTo: self.planFile)
+        await changeItem(item, upgrade: true, label: "Updating \(item.name)")
+    }
+
+    /// Puts one missing or differing item in place.
+    func fix(_ item: Item) async {
+        await changeItem(item, upgrade: false, label: "Fixing \(item.name)")
+    }
+
+    func fixTarget(_ target: String) async {
+        await change("Applying \(target)", confirm: true) {
+            (try await $0.plan(targets: [target], savingTo: self.planFile), false)
         }
     }
 
     func updateAll() async {
         await change("Updating \(snapshot?.outdated.count ?? 0) packages", confirm: true) {
-            try await $0.plan(upgrade: true, savingTo: self.planFile)
+            (try await $0.plan(upgrade: true, savingTo: self.planFile), false)
         }
     }
 
     func apply() async {
-        await change("Applying", confirm: true) { try await $0.plan(savingTo: self.planFile) }
+        await change("Applying", confirm: true) { (try await $0.plan(savingTo: self.planFile), false) }
+    }
+
+    /// Plans just the item. When no change carries one of its names, the
+    /// whole target is planned instead, and the owner sees what that holds.
+    private func changeItem(_ item: Item, upgrade: Bool, label: String) async {
+        guard let target = item.target else { return }
+        await change(label, confirm: false) { ws in
+            let doc = try await ws.plan(upgrade: upgrade, targets: [target], only: item.planNames, savingTo: self.planFile)
+            if doc.actions.contains(where: { $0.manual != true }) { return (doc, false) }
+            return (try await ws.plan(upgrade: upgrade, targets: [target], savingTo: self.planFile), true)
+        }
     }
 
     /// Shows what apply would change, without changing anything.
@@ -146,20 +222,21 @@ final class Store {
         }
     }
 
-    /// Plans, asks when confirm is set or the plan deletes, then applies
-    /// exactly the plan that was shown.
-    private func change(_ label: String, confirm: Bool, plan make: @escaping (Workstation) async throws -> PlanDoc) async {
+    /// Plans, asks when confirm is set, the plan widened, or it deletes,
+    /// then applies exactly the plan that was shown.
+    private func change(_ label: String, confirm: Bool,
+                        plan make: @escaping (Workstation) async throws -> (PlanDoc, widened: Bool)) async {
         guard let workstation, busy == nil else { return }
         busy = label
         defer { busy = nil }
         do {
-            let doc = try await make(workstation)
+            let (doc, widened) = try await make(workstation)
             let executable = doc.actions.filter { $0.manual != true }
             guard !executable.isEmpty else {
                 message = Message(text: "Nothing to change.", failed: false)
                 return
             }
-            if confirm || doc.deletes, !Alerts.confirm(plan: doc) { return }
+            if confirm || widened || doc.deletes, !Alerts.confirm(plan: doc) { return }
             let result = try await workstation.apply(saved: planFile)
             let log = writeLog(result)
             plan = nil
@@ -172,8 +249,9 @@ final class Store {
         await refresh()
     }
 
-    private func lastLine(of r: CommandResult) -> String? {
-        (r.output + r.stderr).split(whereSeparator: \.isNewline).last { $0.contains("fail") || $0.contains("error") }
+    private func lastLine(of r: CommandResult?) -> String? {
+        guard let r else { return nil }
+        return (r.output + r.stderr).split(whereSeparator: \.isNewline).last { $0.contains("fail") || $0.contains("error") }
             .map(String.init)
     }
 
@@ -184,6 +262,53 @@ final class Store {
         let file = dir.appendingPathComponent("last-change.log")
         let text = r.output + (r.stderr.isEmpty ? "" : "\n--- stderr\n" + r.stderr)
         return (try? text.write(to: file, atomically: true, encoding: .utf8)) == nil ? nil : file
+    }
+
+    // MARK: Services
+
+    func service(_ item: Item, _ action: ServiceAction) async {
+        let dirs = (env["PATH"] ?? "").split(separator: ":").map(String.init) + ["/opt/homebrew/bin"]
+        let brew = dirs.map { $0 + "/brew" }.first(where: FileManager.default.isExecutableFile) ?? "/opt/homebrew/bin/brew"
+        guard busy == nil,
+              let (program, args) = Launchd.command(action, for: item, uid: getuid(), home: NSHomeDirectory(), brew: brew)
+        else { return }
+        busy = "\(action.rawValue.capitalized) \(item.name)"
+        defer { busy = nil }
+        let r = try? await ProcessRunner().run(program, args, env: env)
+        message = r?.status == 0
+            ? Message(text: "\(item.name): \(action == .run ? "started" : action.rawValue + " done").", failed: false)
+            : Message(text: "\(item.name): \(lastLine(of: r) ?? "\(action.rawValue) failed").", failed: true)
+        await refresh()
+    }
+
+    func run(_ job: Job) async {
+        await service(Item(name: job.label, kind: "agent", state: "in place"), .run)
+    }
+
+    /// The scheduled agents among the services, with what launchd says of
+    /// their last run.
+    private func readJobs(_ services: [Item]) async -> [Job] {
+        var jobs: [Job] = []
+        let home = NSHomeDirectory()
+        for agent in services where agent.kind == "agent" {
+            let path = Launchd.plistPath(agent.name, home: home)
+            guard let data = FileManager.default.contents(atPath: path),
+                  let plist = try? PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any]
+            else { continue }
+            let schedule = Launchd.schedule(plist: plist)
+            guard !schedule.isEmpty else { continue }
+            var job = Job(label: agent.name, schedule: schedule)
+            if let r = try? await ProcessRunner().run("/bin/launchctl", ["print", "gui/\(getuid())/\(agent.name)"], env: [:]) {
+                (job.running, job.lastExit) = Launchd.parsePrint(r.output)
+            }
+            let log = Launchd.log(label: agent.name, plist: plist, home: home)
+            if let attrs = try? FileManager.default.attributesOfItem(atPath: log) {
+                job.log = URL(fileURLWithPath: log)
+                job.lastRun = attrs[.modificationDate] as? Date
+            }
+            jobs.append(job)
+        }
+        return jobs
     }
 
     // MARK: Findings

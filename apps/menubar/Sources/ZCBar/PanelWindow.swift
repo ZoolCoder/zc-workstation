@@ -8,6 +8,7 @@ import SwiftUI
 final class PanelWindow: NSObject, NSWindowDelegate {
     private let store: Store
     private var panel: NSPanel?
+    private var host: NSHostingController<AnyView>?
     /// Where the panel's top edge stays while its content grows and shrinks.
     private var top: CGFloat = 0
     /// When a click elsewhere last closed the panel: a click on the bar item
@@ -26,16 +27,14 @@ final class PanelWindow: NSObject, NSWindowDelegate {
         }
     }
 
-    private func show() {
+    /// Opens the panel, or keeps it open: a notification or the hotkey.
+    func show() {
         let panel = self.panel ?? make()
         self.panel = panel
         let mouse = NSEvent.mouseLocation
         let screen = NSScreen.screens.first { $0.frame.contains(mouse) } ?? NSScreen.main
         guard let frame = screen?.frame else { return }
-        // SwiftUI sizes the view only once it has laid it out.
-        panel.contentView?.layoutSubtreeIfNeeded()
-        var size = panel.contentView?.fittingSize ?? .zero
-        if size.width < 100 || size.height < 100 { size = NSSize(width: 380, height: 480) }
+        let size = host?.sizeThatFits(in: frame.size) ?? NSSize(width: 428, height: 560)
         // Under the bar: SketchyBar is 36 points high, 2 down from the top.
         let x = min(max(mouse.x - size.width / 2, frame.minX + 8), frame.maxX - size.width - 8)
         top = frame.maxY - 46
@@ -57,9 +56,11 @@ final class PanelWindow: NSObject, NSWindowDelegate {
         let root = PanelView(store: store)
             .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
             .clipShape(RoundedRectangle(cornerRadius: 12))
-        let host = NSHostingView(rootView: root)
+        // The window follows the view's size as tabs and sections change.
+        let host = NSHostingController(rootView: AnyView(root))
         host.sizingOptions = [.preferredContentSize]
-        panel.contentView = host
+        panel.contentViewController = host
+        self.host = host
         return panel
     }
 
@@ -80,4 +81,9 @@ final class PanelWindow: NSObject, NSWindowDelegate {
 /// and the config chooser need.
 private final class KeyPanel: NSPanel {
     override var canBecomeKey: Bool { true }
+
+    /// Escape closes the panel.
+    override func cancelOperation(_ sender: Any?) {
+        orderOut(nil)
+    }
 }

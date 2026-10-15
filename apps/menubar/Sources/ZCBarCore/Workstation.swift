@@ -98,8 +98,14 @@ public struct Workstation: Sendable {
         return report.checks.filter { !$0.isOK }
     }
 
-    public func outdated() async throws -> [Item] {
-        let groups: [ItemGroup] = try await json(["list", "-json", "-state", "outdated"])
+    public func outdated() async throws -> [Item] { try await items(states: ["outdated"]) }
+
+    /// What targets declare, each item knowing its target; no targets is all.
+    public func items(targets: [String] = [], states: [String] = []) async throws -> [Item] {
+        var args = ["list", "-json"]
+        for t in targets { args += ["-target", t] }
+        if !states.isEmpty { args += ["-state", states.joined(separator: ",")] }
+        let groups: [ItemGroup] = try await json(args)
         return groups.flatMap { g in
             (g.items ?? []).map { var i = $0; i.target = g.target; return i }
         }
@@ -140,6 +146,12 @@ public struct Workstation: Sendable {
         switch await f {
         case .success(let v): s.findings = v
         case .failure(let e): errors.append("doctor: " + e.localizedDescription)
+        }
+        let services = s.targets.filter { $0.provider == "services" && !$0.isSkipped }.map(\.target)
+        if !services.isEmpty {
+            do { s.services = try await items(targets: services) } catch {
+                errors.append("services: " + error.localizedDescription)
+            }
         }
         s.errors = errors
         return s

@@ -23,7 +23,7 @@ func ok(_ json: String) -> CommandResult { CommandResult(status: 0, stdout: Data
         "list": ok("""
         [{"target":"packages","provider":"packages","items":[{"name":"tmux","kind":"brew","state":"outdated","version":"3.7c","latest":"3.8"},
           {"name":"git","kind":"brew","state":"outdated"}]},
-         {"target":"runtimes","provider":"tools","items":[{"name":"node","kind":"runtime","state":"outdated"}]}]
+         {"target":"runtimes","provider":"tools","items":[{"name":"node","kind":"runtime","state":"outdated","desc":"requested lts"}]}]
         """),
         // The doctor exits 1 when a check fails; its report still counts.
         "doctor": CommandResult(status: 1, stdout: Data("""
@@ -39,7 +39,7 @@ func ok(_ json: String) -> CommandResult { CommandResult(status: 0, stdout: Data
     #expect(s.errors.isEmpty)
     #expect(s.visibleTargets.map(\.target) == ["packages", "home"])
     #expect(s.outdated.map(\.resource) == ["brew:tmux", "brew:git", "runtime:node"])
-    #expect(s.outdated.map(\.planResource) == ["brew:tmux", "brew:git", nil])
+    #expect(s.services.isEmpty)
     #expect(s.outdated.last?.target == "runtimes")
     #expect(s.findings(ignoring: []).map(\.title) == ["Firewall", "Servers on every network interface"])
     // One gap, one for all updates, two findings.
@@ -94,4 +94,51 @@ func ok(_ json: String) -> CommandResult { CommandResult(status: 0, stdout: Data
 @Test func loginEnvironmentParsesNulSeparatedPairs() {
     let env = Discovery.parseEnv(Data("PATH=/a:/b\0EMPTY=\0X=1=2\0".utf8))
     #expect(env == ["PATH": "/a:/b", "EMPTY": "", "X": "1=2"])
+}
+
+@Test func planNamesCoverEachProvidersResource() {
+    var node = Item(name: "node", kind: "runtime", state: "outdated")
+    node.desc = "requested lts"
+    #expect(node.planNames == ["runtime:node", "node", "node@lts"])
+    #expect(Item(name: ".zshrc", kind: "dotfile", state: "differs").planNames.contains(".zshrc"))
+}
+
+@Test func alertsNameWhatIsNewOnly() {
+    let firewall = Check(name: "security firewall", status: "warn")
+    let old = Snapshot(targets: [TargetStatus(target: "home", inPlace: 36, declared: 36)],
+                       outdated: [Item(name: "tmux", kind: "brew", state: "outdated")], findings: [firewall])
+    var now = old
+    #expect(now.alerts(since: old, ignoring: []).isEmpty)
+
+    now.targets = [TargetStatus(target: "home", inPlace: 34, declared: 36)]
+    now.outdated.append(Item(name: "git", kind: "brew", state: "outdated"))
+    now.findings.append(Check(name: "security Touch ID for sudo", status: "warn"))
+    #expect(now.alerts(since: old, ignoring: []).map(\.title) == ["Touch ID for sudo", "home drifted", "1 update available"])
+    #expect(now.alerts(since: old, ignoring: ["security Touch ID for sudo"]).count == 2)
+}
+
+@Test func launchdScheduleAndState() throws {
+    let schedule = Launchd.schedule(plist: ["StartCalendarInterval": ["Weekday": 1, "Hour": 10, "Minute": 0]])
+    #expect(schedule.first?.weekday == 2)
+    var cal = Calendar(identifier: .gregorian)
+    cal.timeZone = TimeZone(identifier: "UTC")!
+    let thursday = try #require(cal.date(from: DateComponents(year: 2026, month: 10, day: 15, hour: 12)))
+    let job = Job(label: "local.weekly-update", schedule: schedule)
+    #expect(job.next(after: thursday, calendar: cal) == cal.date(from: DateComponents(year: 2026, month: 10, day: 19, hour: 10)))
+
+    let state = Launchd.parsePrint("\tstate = not running\n\truns = 3\n\tlast exit code = 1: Operation not permitted\n")
+    #expect(state.running == false && state.lastExit == 1)
+    #expect(Launchd.parsePrint("\tlast exit code = (never exited)\n").lastExit == nil)
+}
+
+@Test func serviceCommandsPickBrewOrLaunchctl() {
+    let brew = Item(name: "colima", kind: "brew", state: "in place")
+    #expect(Launchd.command(.restart, for: brew, uid: 501, home: "/h", brew: "/b/brew")?.1 == ["services", "restart", "colima"])
+    #expect(Launchd.command(.run, for: brew, uid: 501, home: "/h", brew: "/b/brew") == nil)
+    let agent = Item(name: "local.weekly-update", kind: "agent", state: "in place")
+    #expect(Launchd.command(.run, for: agent, uid: 501, home: "/h", brew: "/b/brew")?.1 == ["kickstart", "gui/501/local.weekly-update"])
+    #expect(Launchd.command(.stop, for: agent, uid: 501, home: "/h", brew: "/b/brew")?.1
+        == ["bootout", "gui/501", "/h/Library/LaunchAgents/local.weekly-update.plist"])
+    #expect(Launchd.command(.restart, for: agent, uid: 501, home: "/h", brew: "/b/brew")?.1.last
+        == "/h/Library/LaunchAgents/local.weekly-update.plist")
 }

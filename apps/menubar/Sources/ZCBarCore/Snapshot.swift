@@ -5,6 +5,8 @@ import Foundation
 public struct Snapshot: Sendable, Equatable {
     public var targets: [TargetStatus]
     public var outdated: [Item]
+    /// What the services targets run: brew services and launch agents.
+    public var services: [Item] = []
     /// The doctor checks that are not ok.
     public var findings: [Check]
     /// A part that could not be read, so the rest still shows.
