@@ -120,15 +120,18 @@ final class Monitor {
 // MARK: Actions
 
 extension Store {
-    func clean(_ spot: Junk) async {
+    /// Clears the folder, or only the entries picked in Cleanup's preview,
+    /// whose sizes `picked` gives.
+    func clean(_ spot: Junk, only picked: [JunkEntry]? = nil) async {
         let size = monitor.junk[spot.id] ?? 0
-        guard busy == nil, Alerts.confirm("Clear \(spot.title)?",
-                                          "This deletes \(Self.bytes(size)) in \(spot.path).\n\n\(spot.detail)",
-                                          button: "Clear") else { return }
+        let what = picked.map { "This deletes \($0.count) items, \(Self.bytes($0.reduce(0) { $0 + $1.size })), in \(spot.path)." }
+            ?? "This deletes \(Self.bytes(size)) in \(spot.path)."
+        guard busy == nil, Alerts.confirm("Clear \(spot.title)?", what + "\n\n\(spot.detail)", button: "Clear") else { return }
         busy = "Clearing \(spot.title)"
         defer { busy = nil }
         let keep = spot.id == "caches" ? monitor.runningApps() : []
-        let stuck = await Task.detached { spot.empty(keeping: keep) }.value
+        let only = picked.map { Set($0.map(\.name)) }
+        let stuck = await Task.detached { spot.empty(keeping: keep, only: only) }.value
         let left = await Task.detached { spot.size(keeping: keep) }.value
         monitor.junk[spot.id] = left
         monitor.readDisk()

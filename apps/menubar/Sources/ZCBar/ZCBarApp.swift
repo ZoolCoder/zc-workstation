@@ -29,11 +29,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSAppleEventManager.shared().setEventHandler(self, andSelector: #selector(open(_:reply:)),
                                                      forEventClass: AEEventClass(kInternetEventClass),
                                                      andEventID: AEEventID(kAEGetURL))
-        store.notifier.onOpen = { [weak self] in self?.window.show() }
+        store.notifier.onOpen = { [weak self] id in id.hasPrefix("care") ? self?.care.show() : self?.window.show() }
         store.openCare = { [weak self] in self?.care.show() }
         store.hotkeyChanged = { [weak self] on in on ? self?.hotkey.register() : self?.hotkey.unregister() }
         if store.hotkey { hotkey.register() }
         Task { await store.start() }
+        care.care.startSchedule()
     }
 
     @objc private func open(_ event: NSAppleEventDescriptor, reply: NSAppleEventDescriptor) {

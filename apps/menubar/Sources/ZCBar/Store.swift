@@ -63,6 +63,7 @@ final class Store {
         static let ignored = "ignoredChecks"
         static let notifies = "notifies"
         static let hotkey = "hotkey"
+        static let weeklyScan = "weeklyScan"
     }
 
     private var workstation: Workstation?
@@ -78,9 +79,15 @@ final class Store {
 
     init() {
         ignored = Set(UserDefaults.standard.stringArray(forKey: Keys.ignored) ?? [])
-        UserDefaults.standard.register(defaults: [Keys.notifies: true, Keys.hotkey: true])
+        UserDefaults.standard.register(defaults: [Keys.notifies: true, Keys.hotkey: true, Keys.weeklyScan: true])
         notifies = UserDefaults.standard.bool(forKey: Keys.notifies)
         hotkey = UserDefaults.standard.bool(forKey: Keys.hotkey)
+        weeklyScan = UserDefaults.standard.bool(forKey: Keys.weeklyScan)
+    }
+
+    /// Smart Care scans by itself once a week.
+    var weeklyScan: Bool {
+        didSet { UserDefaults.standard.set(weeklyScan, forKey: Keys.weeklyScan) }
     }
 
     var notifies: Bool {

@@ -32,11 +32,20 @@ public struct Junk: Sendable, Equatable, Identifiable {
         entries(keeping: extra).reduce(0) { $0 + DiskUsage.allocated($1) }
     }
 
-    /// Removes every entry but those kept, and returns how many would not go:
-    /// some caches belong to the system.
+    /// Each entry and its size, biggest first, for Cleanup's preview.
+    public func contents(keeping extra: Set<String> = []) -> [JunkEntry] {
+        entries(keeping: extra)
+            .map { JunkEntry(name: $0.lastPathComponent, size: DiskUsage.allocated($0)) }
+            .sorted { $0.size > $1.size }
+    }
+
+    /// Removes every entry but those kept, or only the named ones, and
+    /// returns how many would not go: some caches belong to the system.
     @discardableResult
-    public func empty(keeping extra: Set<String> = []) -> Int {
-        entries(keeping: extra).filter { (try? FileManager.default.removeItem(at: $0)) == nil }.count
+    public func empty(keeping extra: Set<String> = [], only: Set<String>? = nil) -> Int {
+        entries(keeping: extra)
+            .filter { only?.contains($0.lastPathComponent) ?? true }
+            .filter { (try? FileManager.default.removeItem(at: $0)) == nil }.count
     }
 
     private func entries(keeping extra: Set<String>) -> [URL] {
@@ -45,4 +54,12 @@ public struct Junk: Sendable, Equatable, Identifiable {
                                                                 includingPropertiesForKeys: nil)) ?? []
         return all.filter { !kept.contains($0.lastPathComponent) }
     }
+}
+
+/// One file or folder in a Junk folder.
+public struct JunkEntry: Sendable, Equatable, Identifiable {
+    public var name: String
+    public var size: Int64
+
+    public var id: String { name }
 }

@@ -15,7 +15,7 @@ public enum DiskUsage {
 }
 
 /// A big file in the home folder, for Large Files.
-public struct LargeFile: Sendable, Equatable, Identifiable {
+public struct LargeFile: Codable, Sendable, Equatable, Identifiable {
     public var url: URL
     public var size: Int64
     public var modified: Date?
@@ -33,23 +33,34 @@ public enum LargeFiles {
     /// app bundles are left out: what lives there belongs to apps, and
     /// Cleanup covers their caches.
     public static func files(paths: [String], home: String, minimum: Int64, limit: Int = 60) -> [LargeFile] {
+        Array(candidates(paths: paths, home: home, minimum: minimum).sorted { $0.size > $1.size }.prefix(limit))
+    }
+
+    /// Folders a package manager or build fills: what is in them comes back
+    /// with the next install, and trashing it breaks the project. Go's
+    /// module cache, ~/go/pkg, is one too.
+    static let dependencies: Set<Substring> = ["node_modules", "vendor", "Pods", "target", "build", "DerivedData",
+                                               "uv-tools", "site-packages", "venv"]
+
+    /// The paths that are the user's own regular files of at least `minimum`.
+    static func candidates(paths: [String], home: String, minimum: Int64) -> [LargeFile] {
         let keys: Set<URLResourceKey> = [.isRegularFileKey, .totalFileAllocatedSizeKey, .contentModificationDateKey]
-        let found = paths.compactMap { path -> LargeFile? in
+        return paths.compactMap { path -> LargeFile? in
             guard path.hasPrefix(home + "/") else { return nil }
             let parts = path.dropFirst(home.count + 1).split(separator: "/")
-            guard parts.first != "Library", !parts.contains(where: { $0.hasPrefix(".") || $0.hasSuffix(".app") }) else { return nil }
+            guard parts.first != "Library", !(parts.count > 1 && parts[0] == "go" && parts[1] == "pkg"),
+                  !parts.contains(where: { $0.hasPrefix(".") || $0.hasSuffix(".app") || dependencies.contains($0) }) else { return nil }
             let url = URL(fileURLWithPath: path)
             guard let v = try? url.resourceValues(forKeys: keys), v.isRegularFile == true else { return nil }
             let size = Int64(v.totalFileAllocatedSize ?? 0)
             return size >= minimum ? LargeFile(url: url, size: size, modified: v.contentModificationDate) : nil
         }
-        return Array(found.sorted { $0.size > $1.size }.prefix(limit))
     }
 }
 
 /// An app in /Applications, and how it got there.
-public struct InstalledApp: Sendable, Equatable, Identifiable {
-    public enum Source: Sendable, Equatable {
+public struct InstalledApp: Codable, Sendable, Equatable, Identifiable {
+    public enum Source: Codable, Sendable, Equatable {
         case cask(String), appStore, other
     }
 
@@ -152,8 +163,39 @@ public enum Leftovers {
     }
 }
 
+/// The last Smart Care scan, kept on disk so the window opens on it while
+/// a fresh scan runs.
+public struct CareScan: Codable, Sendable, Equatable {
+    public var scannedAt: Date
+    public var junk: [String: Int64]
+    public var largeFiles: [LargeFile]
+    public var apps: [InstalledApp]
+    public var agents: [LaunchAgent]
+    /// Optional: scans saved before My Clutter have none.
+    public var duplicates: [DuplicateGroup]?
+    public var oldDownloads: [LargeFile]?
+
+    public init(scannedAt: Date, junk: [String: Int64], largeFiles: [LargeFile], apps: [InstalledApp], agents: [LaunchAgent]) {
+        self.scannedAt = scannedAt
+        self.junk = junk
+        self.largeFiles = largeFiles
+        self.apps = apps
+        self.agents = agents
+    }
+
+    public static func load(from url: URL) -> CareScan? {
+        guard let data = try? Data(contentsOf: url) else { return nil }
+        return try? JSONDecoder().decode(CareScan.self, from: data)
+    }
+
+    public func save(to url: URL) throws {
+        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try JSONEncoder().encode(self).write(to: url, options: .atomic)
+    }
+}
+
 /// A launch agent that starts with the session: Performance lists them.
-public struct LaunchAgent: Sendable, Equatable, Identifiable {
+public struct LaunchAgent: Codable, Sendable, Equatable, Identifiable {
     public var label: String
     public var path: String
     public var program: String

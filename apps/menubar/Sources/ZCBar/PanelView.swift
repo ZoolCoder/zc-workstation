@@ -739,6 +739,7 @@ private struct Footer: View {
             Menu {
                 Toggle("Notifications", isOn: $store.notifies)
                 Toggle("Open Panel with ⌃⌥Z", isOn: $store.hotkey)
+                Toggle("Weekly Smart Care Scan", isOn: $store.weeklyScan)
                 Toggle("Open at Login", isOn: $store.opensAtLogin)
                 Divider()
                 if let path = store.configPath {

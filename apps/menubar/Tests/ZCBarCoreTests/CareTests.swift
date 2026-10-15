@@ -21,9 +21,12 @@ private func write(_ url: URL, bytes: Int) throws {
     try write(home.appendingPathComponent("Downloads/tiny.txt"), bytes: 10)
     try write(home.appendingPathComponent("Library/Caches/huge.bin"), bytes: 500_000)
     try write(home.appendingPathComponent(".cache/hidden.bin"), bytes: 500_000)
+    try write(home.appendingPathComponent("Code/app/node_modules/x/bin"), bytes: 500_000)
+    try write(home.appendingPathComponent("go/pkg/mod/m@v1/big.db"), bytes: 500_000)
 
     let paths = ["Movies/big.mov", "Downloads/mid.zip", "Downloads/tiny.txt", "Library/Caches/huge.bin",
-                 ".cache/hidden.bin", "Gone/missing.bin"].map { home.path + "/" + $0 } + ["/elsewhere/x.bin"]
+                 ".cache/hidden.bin", "Code/app/node_modules/x/bin", "go/pkg/mod/m@v1/big.db",
+                 "Gone/missing.bin"].map { home.path + "/" + $0 } + ["/elsewhere/x.bin"]
     let found = LargeFiles.files(paths: paths, home: home.path, minimum: 100_000)
 
     #expect(found.map(\.name) == ["big.mov", "mid.zip"])
@@ -92,4 +95,186 @@ private func write(_ url: URL, bytes: Int) throws {
     #expect(Launchd.parseDisabled(disabled) == ["com.docker.helper": false, "com.apple.enrollagent": true])
     let list = "PID\tStatus\tLabel\n-\t0\tcom.apple.idle\n2269\t0\tcom.apple.progressd\n"
     #expect(Launchd.parseRunning(list) == ["com.apple.progressd"])
+}
+
+@Test func careScanRoundTripsThroughDisk() throws {
+    let dir = try tempDir()
+    defer { try? FileManager.default.removeItem(at: dir) }
+    var app = InstalledApp(name: "Ghostty", url: URL(fileURLWithPath: "/Applications/Ghostty.app"), bundleID: "com.mitchellh.ghostty",
+                           source: .cask("ghostty"), declared: Item(name: "ghostty", kind: "cask", state: "ok"))
+    app.size = 120
+    let agent = LaunchAgent(label: "local.x", path: "/p.plist", program: "/bin/sh", runAtLoad: true, keepAlive: false)
+    let scan = CareScan(scannedAt: Date(timeIntervalSince1970: 1_700_000_000), junk: ["caches": 42],
+                        largeFiles: [LargeFile(url: URL(fileURLWithPath: "/tmp/big.mov"), size: 9, modified: nil)],
+                        apps: [app], agents: [agent])
+    let url = dir.appendingPathComponent("sub/care.json")
+
+    try scan.save(to: url)
+
+    #expect(CareScan.load(from: url) == scan)
+    #expect(CareScan.load(from: dir.appendingPathComponent("none.json")) == nil)
+}
+
+@Test func duplicatesGroupSameBytesOnly() throws {
+    let home = try tempDir()
+    defer { try? FileManager.default.removeItem(at: home) }
+    try write(home.appendingPathComponent("Downloads/a.zip"), bytes: 300_000)
+    try write(home.appendingPathComponent("Documents/a copy.zip"), bytes: 300_000)
+    try write(home.appendingPathComponent("Movies/b.mov"), bytes: 300_000)
+    try Data(repeating: 9, count: 300_000).write(to: home.appendingPathComponent("Movies/b.mov"))
+    try write(home.appendingPathComponent("Movies/c.mov"), bytes: 200_000)
+
+    let paths = ["Downloads/a.zip", "Documents/a copy.zip", "Movies/b.mov", "Movies/c.mov"].map { home.path + "/" + $0 }
+    let groups = Duplicates.groups(paths: paths, home: home.path, minimum: 100_000)
+
+    #expect(groups.count == 1)
+    #expect(Set(groups[0].files.map(\.name)) == ["a.zip", "a copy.zip"])
+    #expect(groups[0].wasted == 300_000)
+}
+
+@Test func oldDownloadsGoByAge() throws {
+    let folder = try tempDir()
+    defer { try? FileManager.default.removeItem(at: folder) }
+    try write(folder.appendingPathComponent("old.dmg"), bytes: 1000)
+    try write(folder.appendingPathComponent("new.dmg"), bytes: 1000)
+    try write(folder.appendingPathComponent(".hidden"), bytes: 1000)
+
+    let later = Date.now.addingTimeInterval(31 * 86400)
+    #expect(OldDownloads.files(in: folder, now: .now).isEmpty)
+    #expect(Set(OldDownloads.files(in: folder, now: later).map(\.name)) == ["old.dmg", "new.dmg"])
+}
+
+@Test func junkEmptiesOnlyThePickedEntries() throws {
+    let dir = try tempDir()
+    defer { try? FileManager.default.removeItem(at: dir) }
+    try write(dir.appendingPathComponent("a/x.bin"), bytes: 50_000)
+    try write(dir.appendingPathComponent("b.bin"), bytes: 10_000)
+    try write(dir.appendingPathComponent("kept/y.bin"), bytes: 10_000)
+    let spot = Junk(id: "t", title: "T", detail: "", path: dir.path, keep: ["kept"])
+
+    #expect(spot.contents().map(\.name) == ["a", "b.bin"])
+    spot.empty(only: ["b.bin"])
+    #expect(spot.contents().map(\.name) == ["a"])
+    #expect(FileManager.default.fileExists(atPath: dir.appendingPathComponent("kept/y.bin").path))
+}
+
+@Test func backgroundItemsReadTheUsersRunningRecords() {
+    let dump = """
+     Records for UID 501 : X
+     Items:
+     #1:
+                     Name: (null)
+                     Type: developer (0x20)
+              Disposition: [disabled, allowed, not notified] (0x2)
+               Identifier: Unknown Developer
+     #2:
+                     Name: CleanMyMac Menu
+           Developer Name: MacPaw Way Ltd
+                     Type: login item (0x4)
+              Disposition: [enabled, allowed, notified] (0xb)
+               Identifier: 4.com.macpaw.CleanMyMac5.Menu
+        Parent Identifier: 2.com.macpaw.CleanMyMac5
+     #3:
+                     Name: GoogleUpdater
+                     Type: legacy agent (0x10008)
+              Disposition: [disabled, allowed, notified] (0xa)
+               Identifier: 8.com.google.GoogleUpdater.wake
+          Executable Path: /x/GoogleUpdater
+     Records for UID 502 : Y
+     #1:
+                     Name: Other
+                     Type: login item (0x4)
+              Disposition: [enabled, allowed, notified] (0xb)
+               Identifier: 4.other
+    """
+    let items = BackgroundItems.parse(dump, uid: 501)
+
+    #expect(items.map(\.name) == ["CleanMyMac Menu", "GoogleUpdater"])
+    #expect(items[0].enabled && items[0].developer == "MacPaw Way Ltd" && items[0].parent == "2.com.macpaw.CleanMyMac5")
+    #expect(!items[1].enabled && items[1].kind == "legacy agent" && items[1].executable == "/x/GoogleUpdater")
+}
+
+@Test func gatekeeperAssessment() {
+    let ok = Assessment.parse("/Applications/A.app: accepted\nsource=Notarized Developer ID\n")
+    let bad = Assessment.parse("/Applications/B.app: rejected\nsource=no usable signature\n")
+    let adhoc = Assessment.parse("/Applications/C.app: accepted\nsource=Unnotarized Developer ID\n")
+
+    #expect(ok.trusted && ok.source == "Notarized Developer ID")
+    #expect(!bad.accepted && !bad.trusted)
+    #expect(adhoc.accepted && !adhoc.trusted)
+}
+
+@Test func privacyRowsKeepKnownServices() {
+    let rows = Privacy.parse("""
+    kTCCServiceCamera|us.zoom.xos|2
+    kTCCServiceMicrophone|us.zoom.xos|0
+    kTCCServiceUbiquity|com.apple.x|2
+    kTCCServiceCamera|us.zoom.xos|2
+    """)
+
+    #expect(rows == [Permission(service: "Camera", client: "us.zoom.xos", allowed: true),
+                     Permission(service: "Microphone", client: "us.zoom.xos", allowed: false)])
+}
+
+@Test func spaceLensBuildsATreeOfTheBiggest() {
+    let du = """
+    10\t/h/a/tiny
+    4000\t/h/a/big
+    5000\t/h/a
+    3000\t/h/b
+    9000\t/h
+    """
+    let root = SpaceLens.parse(du: du, root: "/h")
+
+    #expect(root?.size == Int64(9000 * 1024))
+    #expect(root?.children.map(\.name) == ["a", "b"])
+    #expect(root?.find("/h/a")?.children.map(\.name) == ["big"])
+    #expect(SpaceLens.parse(du: du, root: "/elsewhere") == nil)
+}
+
+@Test func uninstallRoutes() {
+    var item = Item(name: "raycast", kind: "cask", state: "ok")
+    item.target = "apps"
+
+    #expect(Uninstall.method(declared: item, source: .cask("raycast")) == .remove(target: "apps", resource: "cask:raycast"))
+    #expect(Uninstall.method(declared: nil, source: .cask("zoom")) == .cask("zoom"))
+    #expect(Uninstall.method(declared: nil, source: .appStore) == .trash)
+    #expect(Uninstall.method(declared: nil, source: .other) == .trash)
+}
+
+@Test func launchdToggleSteps() {
+    let off = Launchd.toggleSteps(domain: "gui/501", label: "a.b", plist: "/p.plist", on: false)
+    let on = Launchd.toggleSteps(domain: "gui/501", label: "a.b", plist: "/p.plist", on: true)
+
+    #expect(off == [["bootout", "gui/501/a.b"], ["disable", "gui/501/a.b"]])
+    #expect(on == [["enable", "gui/501/a.b"], ["bootstrap", "gui/501", "/p.plist"]])
+    #expect(off.map(Launchd.mustSucceed) == [false, true])
+    #expect(on.map(Launchd.mustSucceed) == [true, false])
+}
+
+@Test func careScheduleAndAlerts() {
+    let now = Date.now
+    #expect(CareSchedule.due(last: nil, now: now))
+    #expect(!CareSchedule.due(last: now.addingTimeInterval(-6 * 86400), now: now))
+    #expect(CareSchedule.due(last: now.addingTimeInterval(-7 * 86400), now: now))
+
+    #expect(CareSchedule.alerts(junk: 1024, outdated: 0, findings: 0).isEmpty)
+    let alerts = CareSchedule.alerts(junk: 3 * 1024 * 1024 * 1024, outdated: 2, findings: 1)
+    #expect(alerts.map(\.id) == ["care junk", "care updates", "care health"])
+    #expect(alerts.allSatisfy { $0.id.hasPrefix("care") })
+}
+
+@Test func caskIndexMapsAppsToCasks() throws {
+    let payload = #"{"casks":{"raycast":{"raw_artifacts":[[":uninstall",{":quit":"x"}],[":app",["Raycast.app"]]]},"#
+        + #""zoom":{"raw_artifacts":[[":pkg",["zoom.pkg"]]]},"vscode":{"raw_artifacts":[[":app",["Visual Studio Code.app",{"target":"x"}]]]}}}"#
+    let jws = try JSONSerialization.data(withJSONObject: ["payload": payload, "signature": "s"])
+
+    #expect(CaskIndex.apps(jws: jws) == ["Raycast.app": "raycast", "Visual Studio Code.app": "vscode"])
+
+    var a = Item(name: "a", kind: "cask", state: "ok"); a.target = "apps"
+    var b = Item(name: "b", kind: "cask", state: "ok"); b.target = "apps"
+    var c = Item(name: "c", kind: "cask", state: "ok"); c.target = "dev"
+    var d = Item(name: "d", kind: "brew", state: "ok"); d.target = "dev"
+    #expect(CaskIndex.target(items: [a, b, c, d]) == "apps")
+    #expect(CaskIndex.target(items: [d]) == nil)
 }

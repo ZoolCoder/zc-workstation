@@ -79,7 +79,7 @@ public struct ItemGroup: Decodable, Sendable {
     public var items: [Item]?
 }
 
-public struct Item: Decodable, Sendable, Equatable, Identifiable {
+public struct Item: Codable, Sendable, Equatable, Identifiable {
     public var name: String
     public var kind: String
     public var state: String

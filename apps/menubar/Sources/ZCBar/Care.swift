@@ -7,15 +7,19 @@ import ZCBarCore
 @MainActor @Observable
 final class Care {
     enum Module: String, CaseIterable, Identifiable {
-        case smartCare = "Smart Care", cleanup = "Cleanup", apps = "Applications", performance = "Performance"
+        case smartCare = "Smart Care", cleanup = "Cleanup", clutter = "My Clutter", apps = "Applications"
+        case performance = "Performance", protection = "Protection", spaceLens = "Space Lens"
 
         var id: String { rawValue }
         var symbol: String {
             switch self {
             case .smartCare: "sparkles"
             case .cleanup: "trash.fill"
+            case .clutter: "doc.on.doc.fill"
             case .apps: "square.grid.2x2.fill"
             case .performance: "gauge.with.dots.needle.67percent"
+            case .protection: "lock.shield.fill"
+            case .spaceLens: "chart.pie.fill"
             }
         }
     }
@@ -25,23 +29,51 @@ final class Care {
     var scanning = false
     var scannedAt: Date?
     var largeFiles: [LargeFile] = []
+    var duplicates: [DuplicateGroup] = []
+    var oldDownloads: [LargeFile] = []
     var scanningFiles = false
+    /// Each app bundle's cask, from Homebrew's index: what an app installed
+    /// by hand can be adopted as.
+    var casks: [String: String] = [:]
+    var backgroundItems: [BackgroundItem] = []
+    var assessments: [String: Assessment] = [:]
+    var gatekeeper: Bool?
+    /// Nil until read; the TCC databases need Full Disk Access.
+    var permissions: [Permission]?
+    var loadingProtection = false
+    var loadingBackground = false
+    var space: SpaceScan?
+    var scanningSpace = false
     var apps: [InstalledApp] = []
     var loadingApps = false
     var icons: [String: NSImage] = [:]
     var agents: [LaunchAgent] = []
     var background: [NSRunningApplication] = []
+    /// False until a scan runs in this launch: what shows before came from disk.
+    var fresh = false
 
     /// Large Files lists files from this size up.
     nonisolated static let largeFile: Int64 = 200 * 1024 * 1024
+    /// Duplicates are looked for from this size up: hashing smaller files
+    /// costs more than they waste.
+    nonisolated static let duplicateFile: Int64 = 10 * 1024 * 1024
 
     init(store: Store) {
         self.store = store
+        restore()
     }
 
     var monitor: Monitor { store.monitor }
     var junk: Int64 { monitor.junk.values.reduce(0, +) }
-    var clutter: Int64 { largeFiles.reduce(0) { $0 + $1.size } }
+    /// Large files and old downloads, each once, and what duplicates waste.
+    var clutter: Int64 {
+        let files = Dictionary((largeFiles + oldDownloads).map { ($0.id, $0.size) }, uniquingKeysWith: { a, _ in a })
+        return files.values.reduce(0, +) + duplicates.reduce(0) { $0 + $1.wasted }
+    }
+    var adoptable: [InstalledApp] {
+        apps.filter { $0.declared == nil && $0.source == .other && casks[$0.url.lastPathComponent] != nil }
+    }
+    var untrusted: [InstalledApp] { apps.filter { assessments[$0.id].map { !$0.trusted } ?? false } }
     var undeclared: [InstalledApp] { apps.filter { $0.declared == nil } }
     var unused: [InstalledApp] { apps.filter { $0.unused() } }
     var startup: [LaunchAgent] { agents.filter { $0.enabled && ($0.runAtLoad || $0.keepAlive) } }
@@ -60,6 +92,61 @@ final class Care {
         async let agents: Void = loadAgents()
         _ = await (junk, state, files, apps, agents)
         scannedAt = .now
+        fresh = true
+        save()
+    }
+
+    // MARK: Last scan
+
+    private static let saved = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+        .appendingPathComponent("dev.zoolcoder.zcbar/care.json")
+
+    /// Shows the last scan at once; the window starts a fresh one.
+    private func restore() {
+        guard let last = CareScan.load(from: Self.saved) else { return }
+        scannedAt = last.scannedAt
+        if monitor.junk.isEmpty { monitor.junk = last.junk }
+        largeFiles = last.largeFiles
+        duplicates = last.duplicates ?? []
+        oldDownloads = last.oldDownloads ?? []
+        apps = last.apps
+        agents = last.agents
+        for app in apps { icons[app.id] = NSWorkspace.shared.icon(forFile: app.url.path) }
+        readBackground()
+        space = SpaceScan.load(from: Self.savedSpace)
+    }
+
+    private func save() {
+        guard let scannedAt else { return }
+        var scan = CareScan(scannedAt: scannedAt, junk: monitor.junk, largeFiles: largeFiles, apps: apps, agents: agents)
+        scan.duplicates = duplicates
+        scan.oldDownloads = oldDownloads
+        try? scan.save(to: Self.saved)
+    }
+
+    // MARK: Weekly scan
+
+    /// Looks every hour whether a week has passed since the last scan, and
+    /// scans then; what it finds worth knowing becomes a notification.
+    func startSchedule() {
+        guard schedule == nil else { return }
+        schedule = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(60))
+            while !Task.isCancelled {
+                await self?.scheduledScan()
+                try? await Task.sleep(for: .seconds(3600))
+            }
+        }
+    }
+
+    private var schedule: Task<Void, Never>?
+
+    private func scheduledScan() async {
+        guard store.weeklyScan, !scanning, CareSchedule.due(last: scannedAt) else { return }
+        await scan()
+        guard store.notifies else { return }
+        store.notifier.post(CareSchedule.alerts(junk: junk, outdated: store.snapshot?.outdated.count ?? 0,
+                                                findings: store.findings.count))
     }
 
     /// Smart Care's Run: cleans up, then updates, each after its question.
@@ -70,14 +157,20 @@ final class Care {
 
     // MARK: Large files
 
+    /// Large files and duplicates come from one Spotlight query, old
+    /// downloads from the folder itself.
     func scanFiles() async {
         scanningFiles = true
         defer { scanningFiles = false }
         let home = NSHomeDirectory()
-        let args = ["-onlyin", home, LargeFiles.query(minimum: Self.largeFile)]
+        let args = ["-onlyin", home, LargeFiles.query(minimum: Self.duplicateFile)]
         guard let r = try? await ProcessRunner().run("/usr/bin/mdfind", args, env: [:]) else { return }
         let paths = r.output.split(whereSeparator: \.isNewline).map(String.init)
-        largeFiles = await Task.detached { LargeFiles.files(paths: paths, home: home, minimum: Self.largeFile) }.value
+        let downloads = URL(fileURLWithPath: home + "/Downloads")
+        async let large = Task.detached { LargeFiles.files(paths: paths, home: home, minimum: Self.largeFile) }.value
+        async let same = Task.detached(priority: .utility) { Duplicates.groups(paths: paths, home: home, minimum: Self.duplicateFile) }.value
+        async let old = Task.detached { OldDownloads.files(in: downloads) }.value
+        (largeFiles, duplicates, oldDownloads) = await (large, same, old)
     }
 
     func trash(_ file: LargeFile) {
@@ -86,7 +179,13 @@ final class Care {
                                                 button: "Move to Trash") else { return }
         do {
             try FileManager.default.trashItem(at: file.url, resultingItemURL: nil)
-            largeFiles.removeAll { $0 == file }
+            largeFiles.removeAll { $0.id == file.id }
+            oldDownloads.removeAll { $0.id == file.id }
+            duplicates = duplicates.compactMap { group in
+                var group = group
+                group.files.removeAll { $0.id == file.id }
+                return group.files.count > 1 ? group : nil
+            }
             monitor.readDisk()
             store.message = Store.Message(text: "\(file.name) is in the Trash.", failed: false)
         } catch {
@@ -106,6 +205,8 @@ final class Care {
             caskApps = AppCatalog.caskApps(brewInfo: r.stdout)
         }
         let items = (try? await store.cli?.items()) ?? []
+        self.items = items
+        if casks.isEmpty { casks = await Task.detached { Self.readCaskIndex() }.value }
         let folder = URL(fileURLWithPath: "/Applications")
         let found = await Task.detached { AppCatalog.apps(in: folder, caskApps: caskApps, items: items) }.value
         let old = Dictionary(apps.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
@@ -143,11 +244,12 @@ final class Care {
             return
         }
         let leftovers = Leftovers.paths(bundleID: app.bundleID, name: app.name, home: NSHomeDirectory())
+        let method = Uninstall.method(declared: app.declared, source: app.source)
         var how: String
-        switch (app.declared, app.source) {
-        case (let item?, _): how = "zc-workstation removes \(item.resource) and drops it from the Brewfile."
-        case (nil, .cask(let token)): how = "Homebrew uninstalls the cask \(token)."
-        default: how = "The app moves to the Trash."
+        switch method {
+        case .remove(_, let resource): how = "zc-workstation removes \(resource) and drops it from the Brewfile."
+        case .cask(let token): how = "Homebrew uninstalls the cask \(token)."
+        case .trash: how = "The app moves to the Trash."
         }
         if !leftovers.isEmpty {
             how += "\n\nIts files move to the Trash:\n" + leftovers.map { ($0 as NSString).abbreviatingWithTildeInPath }
@@ -157,16 +259,16 @@ final class Care {
         store.busy = "Uninstalling \(app.name)"
         defer { store.busy = nil }
         var failure: String?
-        switch (app.declared, app.source) {
-        case (let item?, _):
-            guard let cli = store.cli, let target = item.target else { return }
-            let r = try? await cli.run(["remove", "-target", target, item.resource])
+        switch method {
+        case .remove(let target, let resource):
+            guard let cli = store.cli else { return }
+            let r = try? await cli.run(["remove", "-target", target, resource])
             if r?.status != 0 { failure = lastLine(r?.stderr) ?? "remove failed" }
-        case (nil, .cask(let token)):
+        case .cask(let token):
             guard let brew = store.program("brew") else { return }
             let r = try? await ProcessRunner().run(brew, ["uninstall", "--cask", token], env: store.loginEnv)
             if r?.status != 0 { failure = lastLine(r?.stderr) ?? "brew uninstall failed" }
-        default:
+        case .trash:
             failure = await recycle([app.url])
         }
         if failure == nil, !leftovers.isEmpty {
@@ -179,6 +281,45 @@ final class Care {
             store.message = Store.Message(text: "\(app.name) is uninstalled.", failed: false)
         }
         monitor.readDisk()
+    }
+
+    // MARK: Adopting
+
+    private var items: [Item] = []
+
+    private nonisolated static func readCaskIndex() -> [String: String] {
+        let cache = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("Homebrew/api/internal")
+        let files = (try? FileManager.default.contentsOfDirectory(atPath: cache.path)) ?? []
+        guard let name = files.first(where: { $0.hasPrefix("packages.") && $0.hasSuffix(".jws.json") }),
+              let data = try? Data(contentsOf: cache.appendingPathComponent(name)) else { return [:] }
+        return CaskIndex.apps(jws: data)
+    }
+
+    /// Hands an app installed by hand to Homebrew, which takes over the copy
+    /// in place, and declares the cask so the Brewfile knows it.
+    func adopt(_ app: InstalledApp) async {
+        guard store.busy == nil, let token = casks[app.url.lastPathComponent],
+              let brew = store.program("brew"), let cli = store.cli else { return }
+        guard let target = CaskIndex.target(items: items) else {
+            store.message = Store.Message(text: "No target declares casks to adopt \(app.name) into.", failed: true)
+            return
+        }
+        guard Alerts.confirm("Adopt \(app.name) as cask \(token)?",
+                             "Homebrew takes over the app in /Applications, and zc-workstation adds cask:\(token) to the \(target) target.",
+                             button: "Adopt") else { return }
+        store.busy = "Adopting \(app.name)"
+        defer { store.busy = nil }
+        let install = try? await ProcessRunner().run(brew, ["install", "--cask", "--adopt", token], env: store.loginEnv)
+        guard install?.status == 0 else {
+            store.message = Store.Message(text: "\(app.name): \(lastLine(install?.stderr) ?? "brew install failed")", failed: true)
+            return
+        }
+        let add = try? await cli.run(["add", "-target", target, "-why", "Adopted from /Applications by ZC Care", "cask:" + token])
+        store.message = add?.status == 0
+            ? Store.Message(text: "\(app.name) is now cask \(token) in \(target).", failed: false)
+            : Store.Message(text: "Homebrew adopted \(app.name), but add failed: \(lastLine(add?.stderr) ?? "")", failed: true)
+        await loadApps()
     }
 
     /// Moves to the Trash; the Finder asks for a password when the app
@@ -236,15 +377,10 @@ final class Care {
         guard store.busy == nil else { return }
         store.busy = "\(on ? "Enabling" : "Disabling") \(agent.label)"
         defer { store.busy = nil }
-        let target = domain + "/" + agent.label
-        let steps = on
-            ? [["enable", target], ["bootstrap", domain, agent.path]]
-            : [["bootout", target], ["disable", target]]
         var failed: String?
-        for args in steps {
+        for args in Launchd.toggleSteps(domain: domain, label: agent.label, plist: agent.path, on: on) {
             let r = try? await ProcessRunner().run("/bin/launchctl", args, env: [:])
-            // bootout fails when the agent is not loaded, bootstrap when it is.
-            if r?.status != 0, args[0] == "enable" || args[0] == "disable" { failed = lastLine(r?.stderr) ?? "launchctl failed" }
+            if r?.status != 0, Launchd.mustSucceed(args) { failed = lastLine(r?.stderr) ?? "launchctl failed" }
         }
         store.message = failed.map { Store.Message(text: "\(agent.label): \($0)", failed: true) }
             ?? Store.Message(text: "\(agent.label) is \(on ? "on" : "off").", failed: false)
@@ -257,5 +393,85 @@ final class Care {
             try? await Task.sleep(for: .seconds(1))
             readBackground()
         }
+    }
+
+    // MARK: Protection
+
+    /// How Gatekeeper sees each app, and the privacy permissions apps
+    /// hold, all read-only.
+    func loadProtection() async {
+        guard !loadingProtection else { return }
+        loadingProtection = true
+        defer { loadingProtection = false }
+        if apps.isEmpty { await loadApps() }
+        async let status = try? ProcessRunner().run("/usr/sbin/spctl", ["--status"], env: [:])
+        async let tcc = readPermissions()
+        gatekeeper = await status.map { $0.output.contains("assessments enabled") }
+        permissions = await tcc
+        await withTaskGroup(of: (String, Assessment).self) { group in
+            for app in apps where assessments[app.id] == nil {
+                group.addTask {
+                    let r = try? await ProcessRunner().run("/usr/sbin/spctl", ["--assess", "-v", app.url.path], env: [:])
+                    return (app.id, Assessment.parse(r?.stderr ?? ""))
+                }
+            }
+            for await (id, a) in group { assessments[id] = a }
+        }
+    }
+
+    /// What runs with the session, as Background Task Management keeps it.
+    /// sfltool asks for an administrator's password when an app runs it,
+    /// so this waits for a click.
+    func loadBackgroundItems() async {
+        guard !loadingBackground else { return }
+        loadingBackground = true
+        defer { loadingBackground = false }
+        guard let r = try? await ProcessRunner().run("/usr/bin/sfltool", ["dumpbtm"], env: [:]), r.status == 0 else {
+            store.message = Store.Message(text: "Background items not read: the password was not given.", failed: true)
+            return
+        }
+        backgroundItems = BackgroundItems.parse(r.output, uid: getuid())
+            .sorted { ($0.developer ?? "~", $0.name) < ($1.developer ?? "~", $1.name) }
+    }
+
+    /// Nil without Full Disk Access: macOS keeps both databases from apps
+    /// that lack it.
+    private func readPermissions() async -> [Permission]? {
+        let dbs = [NSHomeDirectory() + "/Library/Application Support/com.apple.TCC/TCC.db",
+                   "/Library/Application Support/com.apple.TCC/TCC.db"]
+        var rows: [Permission]?
+        for db in dbs {
+            guard let r = try? await ProcessRunner().run("/usr/bin/sqlite3", ["-readonly", "-separator", "|", db, Privacy.query], env: [:]),
+                  r.status == 0 else { continue }
+            rows = (rows ?? []) + Privacy.parse(r.output)
+        }
+        return rows?.sorted { ($0.service, $0.client) < ($1.service, $1.client) }
+    }
+
+    func openSettings(_ pane: String) {
+        if let url = URL(string: "x-apple.systempreferences:" + pane) { NSWorkspace.shared.open(url) }
+    }
+
+    // MARK: Space Lens
+
+    private static let savedSpace = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+        .appendingPathComponent("dev.zoolcoder.zcbar/space.json")
+
+    /// du over the home folder, three levels down, on this volume only: it
+    /// takes minutes, so the last one stays on disk.
+    func scanSpace() async {
+        guard !scanningSpace else { return }
+        scanningSpace = true
+        defer { scanningSpace = false }
+        let home = NSHomeDirectory()
+        guard let r = try? await ProcessRunner().run("/usr/bin/du", ["-k", "-d", "3", "-x", home], env: [:]) else { return }
+        let text = r.output
+        guard let root = await Task.detached(operation: { SpaceLens.parse(du: text, root: home) }).value else {
+            store.message = Store.Message(text: "Space Lens could not read \(home).", failed: true)
+            return
+        }
+        let scan = SpaceScan(scannedAt: .now, root: root)
+        space = scan
+        try? scan.save(to: Self.savedSpace)
     }
 }

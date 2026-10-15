@@ -19,7 +19,7 @@ final class CareWindow: NSObject, NSWindowDelegate {
         self.window = window
         NSApp.activate()
         window.makeKeyAndOrderFront(nil)
-        if care.scannedAt == nil, !care.scanning { Task { await care.scan() } }
+        if !care.fresh, !care.scanning { Task { await care.scan() } }
     }
 
     private func make() -> NSWindow {
@@ -54,8 +54,11 @@ struct CareView: View {
                     switch care.module {
                     case .smartCare: SmartCare(care: care)
                     case .cleanup: Cleanup(care: care)
+                    case .clutter: Clutter(care: care)
                     case .apps: Applications(care: care)
                     case .performance: Performance(care: care)
+                    case .protection: Protection(care: care)
+                    case .spaceLens: SpaceLensView(care: care)
                     }
                 }
                 // minHeight 0: a module taller than the window must not push the window's content.
@@ -128,11 +131,14 @@ private struct Sidebar: View {
         guard care.scannedAt != nil else { return nil }
         switch m {
         case .smartCare: return nil
-        case .cleanup: return care.junk + care.clutter > 0 ? Store.bytes(care.junk + care.clutter) : nil
+        case .cleanup: return care.junk > 0 ? Store.bytes(care.junk) : nil
+        case .clutter: return care.clutter > 0 ? Store.bytes(care.clutter) : nil
         case .apps:
             let n = care.store.snapshot?.outdated.count ?? 0
             return n > 0 ? "\(n)" : nil
         case .performance: return care.startup.isEmpty ? nil : "\(care.startup.count)"
+        case .protection: return care.untrusted.isEmpty ? nil : "\(care.untrusted.count)"
+        case .spaceLens: return care.space.map { Store.bytes($0.root.size) }
         }
     }
 }
@@ -412,10 +418,17 @@ private struct ClutterCard: View {
 
     var body: some View {
         ResultCard(title: "My Clutter", symbol: "doc.on.doc.fill", colors: Tint.blue,
-                   figure: Store.bytes(care.clutter),
-                   detail: "in \(care.largeFiles.count) files over \(Store.bytes(Care.largeFile))",
+                   figure: care.clutter == 0 ? "All clear" : Store.bytes(care.clutter),
+                   detail: care.clutter == 0 ? "No large files, duplicates or old downloads" : detail,
                    working: care.scanningFiles,
-                   link: ("Review Files", { care.module = .cleanup }))
+                   link: ("Review Files", { care.module = .clutter }))
+    }
+
+    private var detail: String {
+        [care.largeFiles.isEmpty ? nil : "\(care.largeFiles.count) large",
+         care.duplicates.isEmpty ? nil : "\(care.duplicates.count) duplicated",
+         care.oldDownloads.isEmpty ? nil : "\(care.oldDownloads.count) old downloads"]
+            .compactMap { $0 }.joined(separator: ", ")
     }
 }
 
@@ -494,51 +507,171 @@ private struct Cleanup: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            Header(title: "Cleanup", subtitle: "\(Store.bytes(care.junk)) of junk, \(Store.bytes(care.clutter)) in large files",
-                   busy: care.monitor.scanning || care.scanningFiles,
-                   action: ("Rescan", { Task { async let a: Void = care.monitor.scan(); async let b: Void = care.scanFiles(); _ = await (a, b) } }))
+            Header(title: "Cleanup", subtitle: "\(Store.bytes(care.junk)) of caches, logs and build output",
+                   busy: care.monitor.scanning,
+                   action: ("Rescan", { Task { await care.monitor.scan() } }))
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     Section("System Junk") {
                         ForEach(Junk.spots(home: NSHomeDirectory())) { spot in
-                            Row(icon: SymbolTile(symbol: "folder.fill", colors: Tint.cyan, size: 32),
-                                title: spot.title, detail: spot.detail,
-                                value: care.monitor.junk[spot.id].map { Store.bytes($0) } ?? "…") {
-                                Button("Clear") { Task { await care.store.clean(spot) } }
-                                    .controlSize(.small)
-                                    .disabled((care.monitor.junk[spot.id] ?? 0) == 0 || care.store.busy != nil)
-                            }
+                            JunkRow(care: care, spot: spot)
                         }
                         Row(icon: SymbolTile(symbol: "trash.fill", colors: Tint.gray, size: 32),
                             title: "Trash", detail: "Emptied by the Finder", value: "") {
                             Button("Empty") { Task { await care.store.emptyTrash() } }.controlSize(.small)
                         }
                     }
+                }
+                .padding(.horizontal, 28)
+                .padding(.bottom, 70)
+            }
+        }
+    }
+}
+
+/// A Junk folder; its chevron opens what is inside, to clear only some.
+private struct JunkRow: View {
+    @Bindable var care: Care
+    let spot: Junk
+    @State private var open = false
+    @State private var entries: [JunkEntry]?
+    @State private var picked: Set<String> = []
+
+    var body: some View {
+        let size = care.monitor.junk[spot.id]
+        VStack(alignment: .leading, spacing: 0) {
+            Row(icon: SymbolTile(symbol: "folder.fill", colors: Tint.cyan, size: 32),
+                title: spot.title, detail: spot.detail, value: size.map { Store.bytes($0) } ?? "…") {
+                Button { toggle() } label: { Image(systemName: open ? "chevron.up" : "chevron.down") }
+                    .controlSize(.small)
+                    .help("Choose what to clear")
+                    .disabled((size ?? 0) == 0)
+                Button(open ? "Clear Selected" : "Clear") { Task { await clear() } }
+                    .controlSize(.small)
+                    .disabled((size ?? 0) == 0 || care.store.busy != nil || (open && picked.isEmpty))
+            }
+            if open {
+                if let entries {
+                    VStack(alignment: .leading, spacing: 0) {
+                        ForEach(entries.prefix(40)) { entry in
+                            Toggle(isOn: Binding(get: { picked.contains(entry.id) },
+                                                 set: { on in if on { picked.insert(entry.id) } else { picked.remove(entry.id) } })) {
+                                HStack {
+                                    Text(entry.name).lineLimit(1).truncationMode(.middle)
+                                    Spacer()
+                                    Text(Store.bytes(entry.size)).monospacedDigit().foregroundStyle(.secondary)
+                                }
+                            }
+                            .toggleStyle(.checkbox)
+                            .padding(.vertical, 3)
+                        }
+                        if entries.count > 40 {
+                            Text("and \(entries.count - 40) smaller").font(.caption).foregroundStyle(.secondary)
+                        }
+                    }
+                    .font(.callout)
+                    .padding(.leading, 56)
+                    .padding(.trailing, 14)
+                    .padding(.bottom, 8)
+                } else {
+                    ProgressView().controlSize(.small).padding(.leading, 56).padding(.bottom, 8)
+                }
+            }
+        }
+    }
+
+    private func toggle() {
+        open.toggle()
+        guard open else { return }
+        entries = nil
+        let spot = spot
+        let keep = spot.id == "caches" ? care.monitor.runningApps() : []
+        Task {
+            let found = await Task.detached { spot.contents(keeping: keep) }.value
+            entries = found
+            picked = Set(found.map(\.id))
+        }
+    }
+
+    private func clear() async {
+        if open, let entries {
+            await care.store.clean(spot, only: entries.filter { picked.contains($0.id) })
+        } else {
+            await care.store.clean(spot)
+        }
+        open = false
+    }
+}
+
+// MARK: My Clutter
+
+private struct Clutter: View {
+    @Bindable var care: Care
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Header(title: "My Clutter", subtitle: care.clutter > 0 ? "\(Store.bytes(care.clutter)) in large files, duplicates and old downloads"
+                                                        : "No large files, duplicates or old downloads",
+                   busy: care.scanningFiles, action: ("Rescan", { Task { await care.scanFiles() } }))
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
                     Section("Large Files") {
                         if care.largeFiles.isEmpty {
-                            Text(care.scanningFiles ? "Looking through your home folder…"
-                                 : "No file over \(Store.bytes(Care.largeFile)) outside Library.")
-                                .foregroundStyle(.secondary).padding(10)
+                            empty("No file over \(Store.bytes(Care.largeFile)) outside Library.")
                         }
-                        ForEach(care.largeFiles) { file in
-                            Row(icon: Image(nsImage: NSWorkspace.shared.icon(forFile: file.url.path)).resizable().frame(width: 32, height: 32),
-                                title: file.name,
-                                detail: (file.url.deletingLastPathComponent().path as NSString).abbreviatingWithTildeInPath
-                                    + (file.modified.map { " · modified " + days($0) } ?? ""),
-                                value: Store.bytes(file.size)) {
-                                Button { NSWorkspace.shared.activateFileViewerSelecting([file.url]) } label: {
-                                    Image(systemName: "magnifyingglass")
-                                }
-                                .controlSize(.small)
-                                .help("Show in Finder")
-                                Button("Trash") { care.trash(file) }.controlSize(.small)
+                        ForEach(care.largeFiles) { FileRow(care: care, file: $0) }
+                    }
+                    Section("Duplicates") {
+                        if care.duplicates.isEmpty {
+                            empty("No two files over \(Store.bytes(Care.duplicateFile)) hold the same bytes.")
+                        }
+                        ForEach(care.duplicates) { group in
+                            VStack(alignment: .leading, spacing: 0) {
+                                Text("\(group.files[0].name) · \(group.files.count) copies, \(Store.bytes(group.wasted)) wasted")
+                                    .font(.callout.weight(.semibold))
+                                    .padding(.horizontal, 10)
+                                    .padding(.top, 8)
+                                ForEach(group.files) { FileRow(care: care, file: $0, showsFolder: true) }
                             }
                         }
+                    }
+                    Section("Old Downloads") {
+                        if care.oldDownloads.isEmpty {
+                            empty("Nothing in Downloads older than 30 days.")
+                        }
+                        ForEach(care.oldDownloads) { FileRow(care: care, file: $0, dateLabel: "added") }
                     }
                 }
                 .padding(.horizontal, 28)
                 .padding(.bottom, 70)
             }
+        }
+    }
+
+    private func empty(_ text: String) -> some View {
+        Text(care.scanningFiles ? "Looking through your home folder…" : text)
+            .foregroundStyle(.secondary).padding(10)
+    }
+}
+
+private struct FileRow: View {
+    @Bindable var care: Care
+    let file: LargeFile
+    var showsFolder = false
+    var dateLabel = "modified"
+
+    var body: some View {
+        let folder = (file.url.deletingLastPathComponent().path as NSString).abbreviatingWithTildeInPath
+        Row(icon: Image(nsImage: NSWorkspace.shared.icon(forFile: file.url.path)).resizable().frame(width: 32, height: 32),
+            title: showsFolder ? folder : file.name,
+            detail: (showsFolder ? file.name : folder) + (file.modified.map { " · \(dateLabel) " + days($0) } ?? ""),
+            value: Store.bytes(file.size)) {
+            Button { NSWorkspace.shared.activateFileViewerSelecting([file.url]) } label: {
+                Image(systemName: "magnifyingglass")
+            }
+            .controlSize(.small)
+            .help("Show in Finder")
+            Button("Trash") { care.trash(file) }.controlSize(.small)
         }
     }
 }
@@ -643,6 +776,12 @@ private struct Applications: View {
                         Row(icon: icon(app), title: app.name, detail: detail(app),
                             value: app.size.map { Store.bytes($0) } ?? "…",
                             flag: app.declared == nil ? "Not in Brewfile" : nil) {
+                            if app.source == .other, app.declared == nil, let token = care.casks[app.url.lastPathComponent] {
+                                Button("Adopt") { Task { await care.adopt(app) } }
+                                    .controlSize(.small)
+                                    .help("Install as cask \(token) over this copy, and add it to the Brewfile")
+                                    .disabled(care.store.busy != nil)
+                            }
                             Button("Uninstall") { Task { await care.uninstall(app) } }
                                 .controlSize(.small)
                                 .disabled(care.store.busy != nil)
@@ -761,5 +900,252 @@ private struct Performance: View {
                 try? await Task.sleep(for: .seconds(3))
             }
         }
+    }
+}
+
+// MARK: Protection
+
+private struct Protection: View {
+    @Bindable var care: Care
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Header(title: "Protection", subtitle: subtitle, busy: care.loadingProtection,
+                   action: ("Rescan", { Task { care.assessments = [:]; await care.loadProtection() } }))
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
+                    Section("Gatekeeper") {
+                        Row(icon: SymbolTile(symbol: "checkmark.shield.fill", colors: care.gatekeeper == false ? Tint.pink : Tint.green, size: 32),
+                            title: care.gatekeeper == false ? "Gatekeeper is off" : "Gatekeeper is on",
+                            detail: "Only apps from identified developers open without a warning.",
+                            value: care.gatekeeper == nil ? "…" : "") { EmptyView() }
+                        ForEach(care.untrusted) { app in
+                            Row(icon: icon(app), title: app.name,
+                                detail: care.assessments[app.id]?.source ?? "No signature Gatekeeper accepts",
+                                value: care.assessments[app.id]?.accepted == true ? "Not notarized" : "Rejected",
+                                flag: "Unverified") {
+                                Button { NSWorkspace.shared.activateFileViewerSelecting([app.url]) } label: {
+                                    Image(systemName: "magnifyingglass")
+                                }
+                                .controlSize(.small)
+                                .help("Show in Finder")
+                            }
+                        }
+                    }
+                    Section("Login Items & Background Tasks") {
+                        ForEach(care.backgroundItems) { item in
+                            Row(icon: SymbolTile(symbol: item.kind == "login item" ? "person.crop.circle.fill" : "gearshape.2.fill",
+                                                 colors: item.enabled ? Tint.orange : Tint.gray, size: 32),
+                                title: item.name,
+                                detail: [item.developer ?? "Unidentified developer", item.kind, item.executable]
+                                    .compactMap { $0 }.joined(separator: " · "),
+                                value: item.enabled ? "Allowed" : "Off",
+                                flag: item.developer == nil && item.enabled ? "Unidentified" : nil) { EmptyView() }
+                        }
+                        HStack {
+                            Text(care.backgroundItems.isEmpty
+                                 ? "macOS's list asks for your password to read. Switch items in System Settings."
+                                 : "Switch these in System Settings; launch agents also in Performance.")
+                                .font(.caption).foregroundStyle(.secondary)
+                            Spacer()
+                            if care.loadingBackground { ProgressView().controlSize(.small) }
+                            Button(care.backgroundItems.isEmpty ? "Read List…" : "Read Again…") {
+                                Task { await care.loadBackgroundItems() }
+                            }
+                            .controlSize(.small)
+                            .disabled(care.loadingBackground)
+                            Button("Open Login Items") { care.openSettings("com.apple.LoginItems-Settings.extension") }
+                                .controlSize(.small)
+                        }
+                        .padding(10)
+                    }
+                    Section("Privacy Permissions") {
+                        if let permissions = care.permissions {
+                            if permissions.isEmpty {
+                                Text("No app holds a permission.").foregroundStyle(.secondary).padding(10)
+                            }
+                            ForEach(permissions) { p in
+                                Row(icon: SymbolTile(symbol: "hand.raised.fill", colors: p.allowed ? Tint.violet : Tint.gray, size: 32),
+                                    title: p.client, detail: p.service, value: p.allowed ? "Allowed" : "Denied") { EmptyView() }
+                            }
+                        } else {
+                            HStack(alignment: .top, spacing: 12) {
+                                SymbolTile(symbol: "lock.fill", colors: Tint.gray, size: 32)
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text("ZCBar needs Full Disk Access to list permissions").font(.body.weight(.medium))
+                                    Text("macOS keeps its privacy database from apps without it. ZCBar is signed ad hoc, so each new build asks again.")
+                                        .font(.caption).foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                                Button("Open Settings") { care.openSettings("com.apple.preference.security?Privacy_AllFiles") }
+                                    .controlSize(.small)
+                            }
+                            .padding(10)
+                        }
+                    }
+                }
+                .padding(.horizontal, 28)
+                .padding(.bottom, 70)
+            }
+        }
+        .task { if care.gatekeeper == nil { await care.loadProtection() } }
+    }
+
+    private var subtitle: String {
+        let bad = care.untrusted.count
+        if care.loadingProtection { return "Asking Gatekeeper about each app…" }
+        return bad > 0 ? "\(bad) apps not verified by Apple" : "Every app is verified by Apple"
+    }
+
+    @ViewBuilder private func icon(_ app: InstalledApp) -> some View {
+        if let image = care.icons[app.id] {
+            Image(nsImage: image).resizable().frame(width: 34, height: 34)
+        } else {
+            SymbolTile(symbol: "app.fill", colors: Tint.gray, size: 32)
+        }
+    }
+}
+
+// MARK: Space Lens
+
+/// The home folder as rings: each ring a level down, each arc a folder's
+/// share of its parent. Clicking an arc goes into it.
+private struct SpaceLensView: View {
+    @Bindable var care: Care
+    @State private var focus: String?
+    @State private var hover: SpaceNode?
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Header(title: "Space Lens", subtitle: subtitle, busy: care.scanningSpace,
+                   action: (care.space == nil ? "Scan" : "Rescan", { Task { await care.scanSpace() } }))
+            if let root = care.space?.root {
+                let node = focus.flatMap(root.find) ?? root
+                HStack(alignment: .top, spacing: 24) {
+                    Sunburst(node: node, hover: $hover) { focus = $0.path }
+                        .frame(width: 420, height: 420)
+                        .overlay {
+                            VStack(spacing: 4) {
+                                Text((hover ?? node).name).font(.headline).lineLimit(1)
+                                Text(Store.bytes((hover ?? node).size)).font(.title2.weight(.bold))
+                                if node.path != root.path {
+                                    Button("Back") { focus = (node.path as NSString).deletingLastPathComponent }
+                                        .controlSize(.small)
+                                }
+                            }
+                            .frame(width: 130)
+                        }
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text((node.path as NSString).abbreviatingWithTildeInPath).font(.caption).foregroundStyle(.secondary)
+                            .lineLimit(1).truncationMode(.middle).padding(.bottom, 6)
+                        ForEach(Array(node.children.enumerated()), id: \.element.id) { i, child in
+                            Button { if !child.children.isEmpty { focus = child.path } } label: {
+                                HStack {
+                                    Circle().fill(Sunburst.color(i, depth: 0)).frame(width: 9, height: 9)
+                                    Text(child.name).lineLimit(1)
+                                    Spacer()
+                                    Text(Store.bytes(child.size)).monospacedDigit().foregroundStyle(.secondary)
+                                    Button { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: child.path)]) } label: {
+                                        Image(systemName: "magnifyingglass")
+                                    }
+                                    .buttonStyle(.plain)
+                                    .help("Show in Finder")
+                                }
+                                .padding(.vertical, 5)
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .font(.callout)
+                    .frame(maxWidth: .infinity)
+                }
+                .padding(.horizontal, 28)
+            } else {
+                VStack(spacing: 14) {
+                    Spacer()
+                    HeroArt(symbol: "chart.pie.fill", colors: Tint.blue, size: 110)
+                    Text(care.scanningSpace ? "Measuring your home folder…" : "See what fills your home folder")
+                        .font(.title2.weight(.bold))
+                    Text("du reads every folder; it takes a few minutes, and the result is kept.")
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                }
+                .frame(maxWidth: .infinity)
+            }
+        }
+    }
+
+    private var subtitle: String {
+        guard let space = care.space else { return "Folders by size, three levels down" }
+        return "\(Store.bytes(space.root.size)) in your home folder, measured " + days(space.scannedAt)
+    }
+}
+
+private struct Sunburst: View {
+    let node: SpaceNode
+    @Binding var hover: SpaceNode?
+    let open: (SpaceNode) -> Void
+
+    private struct Arc: Identifiable {
+        var node: SpaceNode
+        var start: Double
+        var end: Double
+        var depth: Int
+        var color: Color
+        var id: String { node.path }
+    }
+
+    static func color(_ i: Int, depth: Int) -> Color {
+        Color(hue: (Double(i) * 0.13 + 0.78).truncatingRemainder(dividingBy: 1), saturation: 0.65 - Double(depth) * 0.12,
+              brightness: 0.95 - Double(depth) * 0.08)
+    }
+
+    private var arcs: [Arc] {
+        var out: [Arc] = []
+        func walk(_ n: SpaceNode, from start: Double, span: Double, depth: Int, hue: Int?) {
+            guard depth < 3, n.size > 0 else { return }
+            var at = start
+            for (i, child) in n.children.enumerated() {
+                let share = span * Double(child.size) / Double(n.size)
+                let h = hue ?? i
+                out.append(Arc(node: child, start: at, end: at + share, depth: depth, color: Self.color(h, depth: depth)))
+                walk(child, from: at, span: share, depth: depth + 1, hue: h)
+                at += share
+            }
+        }
+        walk(node, from: 0, span: 1, depth: 0, hue: nil)
+        return out
+    }
+
+    var body: some View {
+        ZStack {
+            ForEach(arcs) { arc in
+                Ring(start: arc.start, end: arc.end, inner: 0.34 + Double(arc.depth) * 0.22, outer: 0.34 + Double(arc.depth + 1) * 0.22 - 0.01)
+                    .fill(arc.color.opacity(hover?.path == arc.node.path ? 1 : 0.82))
+                    .onHover { hover = $0 ? arc.node : (hover?.path == arc.node.path ? nil : hover) }
+                    .onTapGesture { if !arc.node.children.isEmpty { open(arc.node) } }
+            }
+        }
+        .animation(.easeOut(duration: 0.25), value: node.path)
+    }
+}
+
+/// A slice of a ring, as fractions of a turn and of the view's half width.
+private struct Ring: Shape {
+    var start: Double
+    var end: Double
+    var inner: Double
+    var outer: Double
+
+    func path(in rect: CGRect) -> Path {
+        let c = CGPoint(x: rect.midX, y: rect.midY)
+        let r = min(rect.width, rect.height) / 2
+        let a0 = Angle.degrees(start * 360 - 90), a1 = Angle.degrees(max(end - 0.002, start) * 360 - 90)
+        var p = Path()
+        p.addArc(center: c, radius: r * outer, startAngle: a0, endAngle: a1, clockwise: false)
+        p.addArc(center: c, radius: r * inner, startAngle: a1, endAngle: a0, clockwise: true)
+        p.closeSubpath()
+        return p
     }
 }

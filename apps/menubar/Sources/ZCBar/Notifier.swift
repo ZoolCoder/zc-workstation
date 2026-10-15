@@ -2,10 +2,12 @@ import AppKit
 import UserNotifications
 import ZCBarCore
 
-/// Posts what a refresh found new; clicking a notification opens the panel.
+/// Posts what a refresh found new; clicking a notification opens the panel,
+/// or the Care window for what Smart Care found.
 @MainActor
 final class Notifier: NSObject, UNUserNotificationCenterDelegate {
-    var onOpen: (() -> Void)?
+    /// Gets the notification's id.
+    var onOpen: ((String) -> Void)?
     private var center: UNUserNotificationCenter { .current() }
 
     func authorize() async {
@@ -33,7 +35,8 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
 
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter,
                                             didReceive response: UNNotificationResponse) async {
-        await MainActor.run { onOpen?() }
+        let id = response.notification.request.identifier
+        await MainActor.run { onOpen?(id) }
     }
 
     /// A menu bar app is often frontmost when it refreshes; show it anyway.
