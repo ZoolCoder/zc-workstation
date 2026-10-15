@@ -28,8 +28,6 @@ same work. Remove the line in the pull request that finishes it.
 - [ ] Sign ZCBar with a Developer ID and notarise it, so Full Disk Access
       survives an update and Gatekeeper opens it without a warning.
 - [ ] Ship ZCBar in the release: a cask for the app next to the CLI's.
-- [ ] Redraw the app icon in the electric blue brand colour; it still uses
-      the old violet tile.
 
 ## Linux (phase 2)
 
@@ -47,7 +45,6 @@ same work. Remove the line in the pull request that finishes it.
 ## Docs
 
 - [ ] Getting started pages per system: macOS, Linux, Windows.
-- [ ] Generate the command reference from the CLI's help, so it cannot drift.
 - [ ] *Good first change:* a toolbox page for a tool in the Brewfile that has
       none yet, under `docs/modules/ROOT/pages/toolbox/`.
 - [ ] *Good first change:* a screenshot of the dashboard for `ui.adoc`, with
