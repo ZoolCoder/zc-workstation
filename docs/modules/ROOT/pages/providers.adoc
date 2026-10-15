@@ -198,6 +198,62 @@ keeps its preferences in a container no terminal may open. That is why the
 page travels inside the saver itself. Query options such as `?light` do not
 reach a `data:` URL, so the saver shows the page's default, dark look.
 
+[#settings]
+== settings
+
+Keeps macOS preferences at the values the config declares, the keys
+`defaults` reads and writes. macOS only, so the target needs `os: [darwin]`.
+
+[source,yaml]
+----
+- name: macos
+  provider: settings
+  os: [darwin]
+  defaults:
+    NSGlobalDomain:
+      KeyRepeat: 2
+      NSWindowResizeTime: 0.001
+    com.apple.dock:
+      autohide: true
+    com.apple.screencapture:
+      location: ~/Screenshots
+----
+
+* The plan reads each key with `defaults read`. A key that is not set is a
+  `CREATE`; one with another value is an `UPDATE`. Apply writes it with the
+  type of the YAML value: `-bool`, `-int`, `-float` or `-string`.
+* The Dock, Finder and the screenshot settings are read only when their
+  process starts, so a change to `com.apple.dock`, `com.apple.finder` or
+  `com.apple.screencapture` adds an action that restarts it.
+* A key the config stops declaring keeps its value. Some keys need a logout
+  to take effect.
+
+[#services]
+== services
+
+Keeps background services running: Homebrew services and launchd agents.
+macOS only. It starts what is stopped and never stops anything.
+
+[source,yaml]
+----
+- name: services
+  provider: services
+  os: [darwin]
+  services: [sketchybar, borders, colima]
+  agents: [~/Library/LaunchAgents/local.weekly-update.plist]
+----
+
+* A service is in place when `brew services list` shows it `started`, or
+  `scheduled` for one that runs on a timer. Otherwise apply runs
+  `brew services restart`, which starts it at every login and recovers one
+  that failed.
+* An agent is in place when `launchctl print gui/<uid>/<label>` finds it; the
+  label is the file name without `.plist`. Otherwise apply loads it with
+  `launchctl bootstrap`. The plist can come from a `dotfiles` target listed
+  earlier in the config, which writes it first.
+* A changed plist is not reloaded. Reload it from a chezmoi `run_onchange_`
+  script that hashes the plist.
+
 [#localdir]
 == localdir
 

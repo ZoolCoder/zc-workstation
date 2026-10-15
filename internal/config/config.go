@@ -21,7 +21,7 @@ const Version = 1
 
 // Providers lists the provider names a target may use. A new provider adds
 // its name here and its package under internal/provider.
-var Providers = []string{"localdir", "packages", "dotfiles", "tools", "desktop"}
+var Providers = []string{"localdir", "packages", "dotfiles", "tools", "desktop", "settings", "services"}
 
 // Systems are the values of a target's os list, as Go names them.
 var Systems = []string{"darwin", "linux", "windows"}
@@ -76,6 +76,14 @@ type Target struct {
 	// Accent is the macOS accent colour the desktop provider sets, one of
 	// Accents.
 	Accent string `yaml:"accent"`
+	// Defaults maps a macOS preferences domain, such as com.apple.dock or
+	// NSGlobalDomain, to the keys the settings provider keeps and their
+	// values: a bool, an integer, a number or a string.
+	Defaults map[string]map[string]any `yaml:"defaults"`
+	// Services are the Homebrew services the services provider keeps running.
+	Services []string `yaml:"services"`
+	// Agents are launchd agent plists the services provider keeps loaded.
+	Agents []string `yaml:"agents"`
 }
 
 // Root is the target's directory, resolved against the config's directory.
@@ -87,6 +95,13 @@ func (c Config) Resolve(t Target) Target {
 	t.Path, t.File, t.Source = c.resolve(t.Path), c.resolve(t.File), c.resolve(t.Source)
 	t.Destination = c.resolve(t.Destination)
 	t.Wallpaper, t.Screensaver = c.resolve(t.Wallpaper), c.resolve(t.Screensaver)
+	agents := make([]string, len(t.Agents))
+	for i, a := range t.Agents {
+		agents[i] = c.resolve(a)
+	}
+	if t.Agents != nil {
+		t.Agents = agents
+	}
 	return t
 }
 
@@ -251,9 +266,31 @@ func (t Target) validateFields(where string) []error {
 		if t.Accent != "" && !slices.Contains(Accents, t.Accent) {
 			errs = append(errs, fmt.Errorf("%s: accent %q is not one of %s", where, t.Accent, strings.Join(Accents, ", ")))
 		}
-		if !slices.Equal(t.OS, []string{"darwin"}) {
-			errs = append(errs, fmt.Errorf("%s: provider desktop drives macOS only; set os: [darwin]", where))
+	case "settings":
+		if len(t.Defaults) == 0 {
+			errs = append(errs, fmt.Errorf("%s: defaults is required for provider settings", where))
 		}
+		for domain, keys := range t.Defaults {
+			for name, v := range keys {
+				switch v.(type) {
+				case bool, int, float64, string:
+				default:
+					errs = append(errs, fmt.Errorf("%s: %s %s must be a bool, number or string", where, domain, name))
+				}
+			}
+		}
+	case "services":
+		if len(t.Services) == 0 && len(t.Agents) == 0 {
+			errs = append(errs, fmt.Errorf("%s: set services or agents for provider services", where))
+		}
+		for _, a := range t.Agents {
+			if filepath.Ext(a) != ".plist" {
+				errs = append(errs, fmt.Errorf("%s: agent %q must be a .plist file", where, a))
+			}
+		}
+	}
+	if (t.Provider == "desktop" || t.Provider == "settings" || t.Provider == "services") && !slices.Equal(t.OS, []string{"darwin"}) {
+		errs = append(errs, fmt.Errorf("%s: provider %s drives macOS only; set os: [darwin]", where, t.Provider))
 	}
 	if t.Provider != "localdir" {
 		unused("path", t.Path != "")
@@ -271,13 +308,20 @@ func (t Target) validateFields(where string) []error {
 		unused("destination", t.Destination != "")
 		unused("mode", t.Mode != "")
 	}
-	if t.Provider == "localdir" || t.Provider == "dotfiles" || t.Provider == "desktop" {
+	if t.Provider != "packages" && t.Provider != "tools" {
 		unused("file", t.File != "")
 	}
 	if t.Provider != "desktop" {
 		unused("wallpaper", t.Wallpaper != "")
 		unused("screensaver", t.Screensaver != "")
 		unused("accent", t.Accent != "")
+	}
+	if t.Provider != "settings" {
+		unused("defaults", len(t.Defaults) > 0)
+	}
+	if t.Provider != "services" {
+		unused("services", len(t.Services) > 0)
+		unused("agents", len(t.Agents) > 0)
 	}
 	return errs
 }

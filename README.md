@@ -28,6 +28,8 @@ It drives the tools that already do each job well:
 | `dotfiles` | A chezmoi source directory | [chezmoi](https://www.chezmoi.io)  |
 | `tools`    | A mise config              | [mise](https://mise.jdx.dev)       |
 | `desktop`  | macOS wallpaper, screen saver | osascript, [WebViewScreenSaver](https://github.com/liquidx/webviewscreensaver) |
+| `settings` | macOS preferences          | defaults                           |
+| `services` | brew services, launchd agents | brew, launchctl                 |
 | `localdir` | Files written in the config | itself                         |
 
 A target can name the systems it is for (`os: [darwin]`), so one config

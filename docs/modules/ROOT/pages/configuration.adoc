@@ -36,7 +36,7 @@ targets:
 
 | `version` | Always `1`. A future format bumps it.
 | `name` | Lowercase kebab case, unique. `-target` selects by it.
-| `provider` | `packages`, `dotfiles`, `tools`, `desktop` or `localdir`.
+| `provider` | `packages`, `dotfiles`, `tools`, `desktop`, `settings`, `services` or `localdir`.
 | `os` | The systems the target is for: `darwin`, `linux`, `windows`. Empty means every system.
 |===
 
@@ -57,6 +57,9 @@ targets:
 | `desktop` | `wallpaper` | The picture to show on every desktop.
 | | `screensaver` | The web page for WebViewScreenSaver to show. Set this, `wallpaper`, `accent`, or any of them. The target needs `os: [darwin]`.
 | | `accent` | The macOS accent colour: `blue`, `purple`, `pink`, `red`, `orange`, `yellow`, `green` or `graphite`.
+| `settings` | `defaults` | Required. A macOS preferences domain, such as `com.apple.dock` or `NSGlobalDomain`, to its keys and values: a bool, an integer, a number or a string. A string starting with `~/` is a path in your home directory. The target needs `os: [darwin]`.
+| `services` | `services` | Homebrew services to keep running. Set this, `agents`, or both. The target needs `os: [darwin]`.
+| | `agents` | launchd agent plists to keep loaded. The label is the file name without `.plist`.
 | `localdir` | `path` | Required. The directory to keep.
 | | `files` | File name to content. Names must stay inside `path`.
 | | `prune` | Also delete files in `path` the config does not list.

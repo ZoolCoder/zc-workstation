@@ -91,6 +91,10 @@ targets:
   - {name: dk, provider: desktop, file: x}
   - {name: dl, provider: desktop, os: [darwin, linux], screensaver: s.html}
   - {name: da, provider: desktop, os: [darwin], accent: teal}
+  - {name: st, provider: settings, os: [darwin]}
+  - {name: sv, provider: settings, os: [darwin], defaults: {com.apple.dock: {persistent-apps: [a]}}, services: [x]}
+  - {name: se, provider: services, os: [darwin], agents: [job.txt]}
+  - {name: sl, provider: services, os: [linux], services: [x]}
 `))
 	if err == nil {
 		t.Fatal("invalid config accepted")
@@ -101,6 +105,9 @@ targets:
 		"target tl: file is required", "target tl: source does nothing", "target tl: wallpaper does nothing",
 		"target dk: set wallpaper, screensaver or accent", "target dk: file does nothing", "target dk: provider desktop drives macOS only",
 		"target dl: provider desktop drives macOS only", `target da: accent "teal" is not one of`,
+		"target st: defaults is required", "target sv: com.apple.dock persistent-apps must be a bool, number or string",
+		"target sv: services does nothing", `target se: agent "job.txt" must be a .plist file`,
+		"target sl: provider services drives macOS only",
 	} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("error lacks %q:\n%v", want, err)
