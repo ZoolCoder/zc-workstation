@@ -68,7 +68,7 @@
       <td><span class="chip {{stateChip .State}}"><i></i>{{.State}}</span></td>
       <td class="mono">{{.Version}}{{if .Latest}} <span class="muted">→</span> {{.Latest}}{{end}}</td>
       <td>{{.App}}</td>
-      <td class="wrap muted">{{.Desc}}</td>
+      <td class="wrap">{{if .Why}}{{.Why}}{{if .Desc}}<div class="muted">{{.Desc}}</div>{{end}}{{else}}<span class="muted">{{.Desc}}</span>{{end}}</td>
     </tr>{{end}}</tbody>
   </table></div>
   <div class="pager" id="items-pager"></div>

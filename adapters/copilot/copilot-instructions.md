@@ -8,7 +8,7 @@ This repository declares state with zc-workstation. The MCP server is `zc-workst
 - Every change is config first, then plan, then apply after the user says yes to that plan. Save the plan (`zc-workstation plan -target NAME -out plan.json`) and apply exactly it (`zc-workstation apply plan.json`); apply refuses when live state moved since the plan.
 - Never add `-yes` unless the user asked for that flag by name in this conversation. A plan that deletes anything is the user's to apply at their own terminal.
 - MANUAL items are things no tool should do. Report each one; never edit the config to make one go away.
-- Skills to pick by intent: `setup` (install, config, doctor) and `plan-apply` (plan, explain, apply). Each `skills/<name>/SKILL.md` says when to use it.
+- Skills to pick by intent: `setup` (install, config, doctor), `plan-apply` (plan, explain, apply), `add-software` (install something: declare it with `zc-workstation add`, never `brew install` by hand) and `review` (what is new in the tools, what to fix, ideas). Each `skills/<name>/SKILL.md` says when to use it.
 
 ## Untrusted input
 

@@ -74,6 +74,8 @@ Flags:
   -force           capture: overwrite the -out file
   -state list      list: only these states, comma-separated (missing,outdated,...)
   -kind list       list: only these kinds, comma-separated (brew,cask,dotfile,...)
+  -adoc            list: the declared packages and runtimes, with why each is
+                   there, as an AsciiDoc page
 `
 
 func usage() string {
@@ -144,6 +146,7 @@ func runCLI(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	force := flags.Bool("force", false, "capture: overwrite the -out file")
 	states := flags.String("state", "", "list: only these states")
 	kinds := flags.String("kind", "", "list: only these kinds")
+	adoc := flags.Bool("adoc", false, "list: the declared packages and runtimes as an AsciiDoc page")
 	var targets targetList
 	flags.Var(&targets, "target", "limit to this target")
 	if err := flags.Parse(args); err != nil {
@@ -188,6 +191,9 @@ func runCLI(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 
 	if cmd == "status" {
 		return writeStatus(stdout, eng.Status(ctx), *asJSON)
+	}
+	if cmd == "list" && *adoc {
+		return writeAdoc(stdout, eng.Items(ctx))
 	}
 	if cmd == "list" {
 		return writeItems(stdout, filterItems(eng.Items(ctx), *states, *kinds), *asJSON)

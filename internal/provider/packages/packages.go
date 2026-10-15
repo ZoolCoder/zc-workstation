@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/zoolcoder/zc-workstation/internal/config"
+	"github.com/zoolcoder/zc-workstation/internal/manifest"
 	"github.com/zoolcoder/zc-workstation/internal/plan"
 	"github.com/zoolcoder/zc-workstation/internal/provider"
 	"github.com/zoolcoder/zc-workstation/internal/sh"
@@ -51,6 +52,11 @@ type manager struct {
 	// manager cannot say.
 	outdated func(ctx context.Context, r sh.Runner) (updates, error)
 	upgrade  func(r sh.Runner, i item) func(context.Context) error
+	// key reads an entry line for its manifest comments, and entry writes
+	// one, with kind defaulted and checked; nil when the manifest is not
+	// line-based.
+	key   manifest.Key
+	entry func(kind, name string) (string, string, error)
 }
 
 // Manager is the package manager t uses on this system.
@@ -78,6 +84,8 @@ type state struct {
 	missing     []item
 	manual      []plan.Action
 	declared    int
+	// notes are the manifest comments about each item, by resource.
+	notes map[string]manifest.Note
 }
 
 func (p Provider) read(ctx context.Context, t config.Target) (state, error) {
@@ -93,6 +101,9 @@ func (p Provider) read(ctx context.Context, t config.Target) (state, error) {
 		return s, fmt.Errorf("%s: %w", t.File, err)
 	}
 	s.items, s.unsupported = items, unsupported
+	if m.key != nil {
+		s.notes = manifest.Notes(data, m.key)
+	}
 	for _, line := range unsupported {
 		s.manual = append(s.manual, manual(t, "unsupported:"+line, "zc-workstation does not install this kind of entry; install it by hand"))
 	}

@@ -16,7 +16,7 @@ type itemRow struct {
 
 // Search is what the table's search box matches against.
 func (r itemRow) Search() string {
-	return strings.ToLower(strings.Join([]string{r.Target, r.Kind, r.Name, r.State, r.Version, r.Latest, r.App, r.Desc}, " "))
+	return strings.ToLower(strings.Join([]string{r.Target, r.Kind, r.Name, r.State, r.Version, r.Latest, r.App, r.Why, r.Section, r.Desc}, " "))
 }
 
 // configured is one program the dotfiles configure.

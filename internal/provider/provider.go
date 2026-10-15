@@ -10,6 +10,7 @@ import (
 	"context"
 
 	"github.com/zoolcoder/zc-workstation/internal/config"
+	"github.com/zoolcoder/zc-workstation/internal/manifest"
 	"github.com/zoolcoder/zc-workstation/internal/plan"
 )
 
@@ -69,12 +70,27 @@ type Item struct {
 	App      string `json:"app,omitempty"`
 	Desc     string `json:"desc,omitempty"`
 	Homepage string `json:"homepage,omitempty"`
+	// Section and Why come from the manifest's comments: the heading the
+	// entry sits under, and the comment at the end of its line.
+	manifest.Note
 }
 
 // Lister is a Provider that can list what a target declares, item by item,
 // for the inventory.
 type Lister interface {
 	Items(ctx context.Context, t config.Target) ([]Item, error)
+}
+
+// Entry is one item to declare: a kind such as brew, cask or runtime, a
+// name, with @version for a runtime, and why it is there.
+type Entry struct {
+	Kind, Name, Why, Section string
+}
+
+// Adder is a Provider that can declare a new item in its manifest. It edits
+// the manifest only; plan and apply install the item.
+type Adder interface {
+	Add(t config.Target, e Entry) error
 }
 
 // Capturer is a Provider that can write its manifest from what the machine

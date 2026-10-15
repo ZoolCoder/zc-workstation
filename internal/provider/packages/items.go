@@ -73,6 +73,7 @@ func (p Provider) Items(ctx context.Context, t config.Target) ([]provider.Item, 
 			st = provider.InPlace
 		}
 		item := describe(i, st, info)
+		item.Note = s.notes[i.resource()]
 		if v, ok := lookup(news, i); ok && st == provider.InPlace {
 			item.State, item.Latest = provider.Outdated, v.To
 			if item.Version == "" {

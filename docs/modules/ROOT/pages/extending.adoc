@@ -11,7 +11,7 @@ type Provider interface {
 }
 ----
 
-Four optional interfaces feed the dashboard, `doctor`, `list` and `capture`:
+Five optional interfaces feed the dashboard, `doctor`, `list`, `capture` and `add`:
 
 [source,go]
 ----
@@ -34,7 +34,16 @@ type Lister interface {
 type Capturer interface {
 	Capture(ctx context.Context, t config.Target) ([]byte, error)
 }
+
+// Add declares one entry in the manifest, for add. It edits the file only.
+type Adder interface {
+	Add(t config.Target, e Entry) error
+}
 ----
+
+A line-based manifest gets sections and whys from `internal/manifest`:
+`manifest.Notes` reads them for `Items`, and `manifest.Insert` and
+`manifest.Line` write an entry for `Add`.
 
 == Steps
 

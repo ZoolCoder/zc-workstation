@@ -8,7 +8,8 @@
 | `plan` | Read live state and list what would change. The default.
 | `apply [FILE]` | Make the changes, then plan again to verify. With a saved plan, exactly those.
 | `status` | What is in place per target, without diffing. Targets for another system show as skipped.
-| `list` | Every package, app, dotfile and runtime the config declares, one line each: its state, installed version, the app it configures, and a description. Then what is installed but declared nowhere.
+| `list` | Every package, app, dotfile and runtime the config declares, one line each: its state, installed version, the app it configures, and why it is there. Then what is installed but declared nowhere.
+| `add ITEM` | Declare a package or runtime in one target's manifest, with why it is there. Installs nothing; `plan` and `apply` do.
 | `capture` | Print the manifest one target would declare to match this machine. Needs `-target`.
 | `validate` | Check the config offline.
 | `doctor` | Machine health: binary, system, config, the programs targets need, and each target.
@@ -27,6 +28,9 @@
 | `-force` | `capture -out`: overwrite `FILE` if it exists.
 | `-state LIST` | `list`: only these states, comma-separated, such as `outdated,not declared`.
 | `-kind LIST` | `list`: only these kinds, comma-separated, such as `cask,mas`.
+| `-adoc` | `list`: the declared packages and runtimes as an AsciiDoc page, one table per section.
+| `-why TEXT` | `add`: one line on why the item is there.
+| `-section NAME` | `add`: the manifest section to add it under; a new name starts a new section.
 | `-json` | `plan`, `status`, `list` and `doctor`: machine-readable.
 | `-exit-code` | `plan`: exit 2 for changes, 3 for manual-only.
 | `-yes` | `apply`: skip the confirmation prompt for deletions.
@@ -60,7 +64,9 @@ States:
   these are formulae installed on request, casks, taps and App Store apps; a
   dependency never shows.
 
-Versions and descriptions come from the package manager; see
+ABOUT is the item's why, from its manifest line, else the package manager's
+description; JSON has both, as `why` and `desc`, with the `section`. Versions
+and descriptions come from the package manager; see
 xref:providers.adoc[Providers]. A target for another system is listed as
 skipped, one that cannot be read with its error. The reads run side by side,
 so a full list takes about two seconds on a Mac with a few hundred packages.
@@ -70,6 +76,56 @@ so a full list takes about two seconds on a Mac with a few hundred packages.
 $ zc-workstation list -state outdated
 $ zc-workstation list -state "not declared" -kind cask,mas
 ----
+
+== Why each item is there
+
+A manifest says what is installed; its comments say why. A comment at the end
+of an entry's line is that entry's why. A comment line that opens a block,
+after a blank line or at the top of the file, is the heading of the section
+below it.
+
+[source,ruby]
+----
+# Git
+brew "git-delta" # Side-by-side, syntax-highlighted git diffs
+brew "lazygit"   # Git in a terminal UI, opened from tmux with prefix g
+----
+
+The same works in apt and dnf package lists and in a mise config's
+`[tools]` table: `go = "1.26" # Builds zc-workstation`.
+
+`list`, the dashboard and the MCP `list` tool show the why. `list -adoc`
+turns it into a page that names every tool, links its homepage, and says why
+you have it; keep that page in your config repository and generate it again
+after a change:
+
+[source,console]
+----
+$ zc-workstation list -adoc > docs/software.adoc
+----
+
+== Add
+
+`add` writes one entry, with its why, into a target's manifest. It installs
+nothing: plan and apply do, so you review the change like any other edit.
+
+[source,console]
+----
+$ zc-workstation add -target packages -section Git -why "Fixup commits that find their target" brew:git-absorb
+added brew:git-absorb to /Users/me/config/Brewfile; review and install it with: zc-workstation plan -target packages
+$ zc-workstation add -target runtimes -why "Builds zc-workstation" runtime:go@1.26
+----
+
+* The item is `kind:name`: `brew`, `cask` or `tap` for a Brewfile, the
+  manager's name for apt and dnf, `runtime` for mise. A bare name is a
+  formula, a package or a runtime.
+* A formula or cask from a third-party tap, such as
+  `brew:cirruslabs/cli/tart`, brings its `tap` line too.
+* A runtime is `name@version`; without a version it asks for `latest`.
+* In a manifest with sections, `-section` is required, and the error lists
+  them. An item the manifest already declares is refused.
+* App Store apps need their id: write the `mas` line yourself. winget files
+  are not edited.
 
 == Capture
 

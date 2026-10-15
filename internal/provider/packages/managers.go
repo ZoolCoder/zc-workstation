@@ -13,6 +13,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/zoolcoder/zc-workstation/internal/manifest"
 	"github.com/zoolcoder/zc-workstation/internal/sh"
 )
 
@@ -25,6 +26,23 @@ var managers = map[string]manager{
 		chosen:    brewChosen,
 		outdated:  brewOutdated,
 		upgrade:   brewUpgrade,
+		key: func(l string) (string, bool) {
+			m := brewLine.FindStringSubmatch(l)
+			if m == nil {
+				return "", false
+			}
+			return m[1] + ":" + m[2], true
+		},
+		entry: func(kind, name string) (string, string, error) {
+			switch kind {
+			case "":
+				kind = "brew"
+			case "brew", "cask", "tap":
+			default:
+				return "", "", fmt.Errorf("a Brewfile entry is brew, cask or tap, not %q; add App Store apps by hand, with their id", kind)
+			}
+			return kind, kind + ` "` + name + `"`, nil
+		},
 		install: func(r sh.Runner, i item) func(context.Context) error {
 			switch i.Kind {
 			case "tap":
@@ -46,6 +64,8 @@ var managers = map[string]manager{
 	"apt": {
 		program: "apt-get",
 		parse:   listParser("apt"),
+		key:     listKey("apt"),
+		entry:   listEntry("apt"),
 		installed: func(ctx context.Context, r sh.Runner, _ []item) (map[string]set, map[string]string, error) {
 			out, err := r.Output(ctx, "dpkg-query", "-W", "-f", "${db:Status-Abbrev}\t${Package}\n")
 			if err != nil {
@@ -73,6 +93,8 @@ var managers = map[string]manager{
 	"dnf": {
 		program: "dnf",
 		parse:   listParser("dnf"),
+		key:     listKey("dnf"),
+		entry:   listEntry("dnf"),
 		installed: func(ctx context.Context, r sh.Runner, _ []item) (map[string]set, map[string]string, error) {
 			out, err := r.Output(ctx, "rpm", "-qa", "--qf", "%{NAME}\n")
 			if err != nil {
@@ -214,6 +236,19 @@ func listParser(kind string) func([]byte) ([]item, []string, error) {
 			}
 		}
 		return items, nil, nil
+	}
+}
+
+func listKey(kind string) manifest.Key {
+	return func(l string) (string, bool) { return kind + ":" + l, true }
+}
+
+func listEntry(kind string) func(string, string) (string, string, error) {
+	return func(k, name string) (string, string, error) {
+		if k != "" && k != kind {
+			return "", "", fmt.Errorf("this manifest lists %s packages, not %q", kind, k)
+		}
+		return kind, name, nil
 	}
 }
 

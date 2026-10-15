@@ -282,6 +282,23 @@ func itemKey(i provider.Item) string {
 	return key
 }
 
+// Add declares e in the one selected target's manifest.
+func (e *Engine) Add(entry provider.Entry) (config.Target, error) {
+	if len(e.targets) != 1 {
+		return config.Target{}, fmt.Errorf("add needs exactly one target, %d selected; use -target", len(e.targets))
+	}
+	t := e.targets[0]
+	prov, err := e.provider(t)
+	if err != nil {
+		return t, err
+	}
+	a, ok := prov.(provider.Adder)
+	if !ok {
+		return t, fmt.Errorf("provider %s cannot add items; edit %s by hand", t.Provider, t.File)
+	}
+	return t, a.Add(t, entry)
+}
+
 // Capture writes the manifest the one selected target would declare to
 // match this machine.
 func (e *Engine) Capture(ctx context.Context) (config.Target, []byte, error) {

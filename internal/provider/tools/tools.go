@@ -247,12 +247,14 @@ func (p Provider) Items(ctx context.Context, t config.Target) ([]provider.Item, 
 	tools := fromFile(all, file)
 	// Updates are extra: without them the inventory still lists everything.
 	news, _ := p.outdated(ctx, t)
+	data, _ := os.ReadFile(file)
+	notes := declaredTools(data)
 	items := make([]provider.Item, 0, len(tools))
 	have := map[string]bool{}
 	for _, k := range sorted(tools) {
 		have[k.name+"@"+tools[k].version] = true
 		item := provider.Item{Name: k.name, Kind: "runtime", State: provider.Missing,
-			Version: tools[k].version, Desc: "requested " + k.version}
+			Version: tools[k].version, Desc: "requested " + k.version, Note: notes[k.name]}
 		if tools[k].ok {
 			item.State = provider.InPlace
 			if v, ok := news[k]; ok {

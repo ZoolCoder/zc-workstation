@@ -11,6 +11,7 @@ import (
 
 	"github.com/zoolcoder/zc-workstation/internal/config"
 	"github.com/zoolcoder/zc-workstation/internal/plan"
+	"github.com/zoolcoder/zc-workstation/internal/provider"
 	"github.com/zoolcoder/zc-workstation/internal/sh"
 )
 
@@ -123,5 +124,27 @@ func TestOutdatedExtraUpgradeAndCapture(t *testing.T) {
 	out, err := p.Capture(context.Background(), tg)
 	if err != nil || string(out) != "# Captured by zc-workstation from what mise has installed.\n[tools]\njq = \"latest\"\nnode = [\"lts\", \"22.22.2\"]\n" {
 		t.Fatalf("capture %v\n%s", err, out)
+	}
+}
+
+func TestAddPutsTheToolInTheToolsTable(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "mise.toml")
+	if err := os.WriteFile(file, []byte("[tools]\nnode = \"lts\" # web\n\n[settings]\nx = 1\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	tg := config.Target{Name: "rt", Provider: "tools", File: file}
+	p := New(&sh.Fake{})
+	if err := p.Add(tg, provider.Entry{Name: "node@22"}); err == nil {
+		t.Fatal("duplicate added")
+	}
+	if err := p.Add(tg, provider.Entry{Name: "npm:prettier", Why: "formatter"}); err != nil {
+		t.Fatal(err)
+	}
+	b, _ := os.ReadFile(file)
+	if want := "[tools]\nnode = \"lts\" # web\n\"npm:prettier\" = \"latest\" # formatter\n\n[settings]\nx = 1\n"; string(b) != want {
+		t.Fatalf("mise.toml:\n%s", b)
+	}
+	if n := declaredTools(b); n["npm:prettier"].Why != "formatter" || n["node"].Why != "web" || len(n) != 2 {
+		t.Fatalf("notes %+v", n)
 	}
 }

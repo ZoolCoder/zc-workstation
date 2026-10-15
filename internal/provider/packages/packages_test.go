@@ -10,6 +10,7 @@ import (
 
 	"github.com/zoolcoder/zc-workstation/internal/config"
 	"github.com/zoolcoder/zc-workstation/internal/plan"
+	"github.com/zoolcoder/zc-workstation/internal/provider"
 	"github.com/zoolcoder/zc-workstation/internal/sh"
 )
 
@@ -24,7 +25,7 @@ tap "felixkratz/formulae"
 tap "hashicorp/tap"
 `
 
-func manifest(t *testing.T, name, body string) config.Target {
+func writeManifest(t *testing.T, name, body string) config.Target {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), name)
 	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
@@ -55,7 +56,7 @@ func resources(actions []plan.Action) []string {
 
 func TestBrewPlanInstallsWhatIsMissing(t *testing.T) {
 	r := brewMachine()
-	tg := manifest(t, "Brewfile", brewfile)
+	tg := writeManifest(t, "Brewfile", brewfile)
 	actions, err := New(r, "darwin").Plan(context.Background(), tg)
 	if err != nil {
 		t.Fatal(err)
@@ -79,7 +80,7 @@ func TestBrewPlanInstallsWhatIsMissing(t *testing.T) {
 }
 
 func TestBrewMeasure(t *testing.T) {
-	live, err := New(brewMachine(), "darwin").Measure(context.Background(), manifest(t, "Brewfile", brewfile))
+	live, err := New(brewMachine(), "darwin").Measure(context.Background(), writeManifest(t, "Brewfile", brewfile))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -91,25 +92,25 @@ func TestBrewMeasure(t *testing.T) {
 func TestMasMissingMakesAppStoreAppsManual(t *testing.T) {
 	r := brewMachine()
 	r.Programs = []string{"brew"}
-	actions, err := New(r, "darwin").Plan(context.Background(), manifest(t, "Brewfile", `mas "Bitwarden", id: 1352778147`))
+	actions, err := New(r, "darwin").Plan(context.Background(), writeManifest(t, "Brewfile", `mas "Bitwarden", id: 1352778147`))
 	if err != nil || len(actions) != 1 || actions[0].Op != plan.OpManual || !strings.Contains(actions[0].Detail, "brew install mas") {
 		t.Fatalf("plan %+v %v", actions, err)
 	}
 }
 
 func TestMissingManagerIsOneManualStep(t *testing.T) {
-	actions, err := New(&sh.Fake{}, "darwin").Plan(context.Background(), manifest(t, "Brewfile", brewfile))
+	actions, err := New(&sh.Fake{}, "darwin").Plan(context.Background(), writeManifest(t, "Brewfile", brewfile))
 	if err != nil || len(actions) != 1 || actions[0].Op != plan.OpManual || actions[0].Resource != "brew" {
 		t.Fatalf("plan %+v %v", actions, err)
 	}
-	if _, err := New(&sh.Fake{}, "darwin").Measure(context.Background(), manifest(t, "Brewfile", brewfile)); err == nil {
+	if _, err := New(&sh.Fake{}, "darwin").Measure(context.Background(), writeManifest(t, "Brewfile", brewfile)); err == nil {
 		t.Fatal("measured without brew")
 	}
 }
 
 func TestBadBrewfile(t *testing.T) {
 	for _, body := range []string{"brew git\n", `mas "Bitwarden"`} {
-		if _, err := New(brewMachine(), "darwin").Plan(context.Background(), manifest(t, "Brewfile", body)); err == nil {
+		if _, err := New(brewMachine(), "darwin").Plan(context.Background(), writeManifest(t, "Brewfile", body)); err == nil {
 			t.Errorf("accepted %q", body)
 		}
 	}
@@ -122,7 +123,7 @@ func TestApt(t *testing.T) {
 			"dpkg-query -W -f ${db:Status-Abbrev}\t${Package}": "ii \tgit\nrc \tzsh\nii \ttmux\n",
 		},
 	}
-	tg := manifest(t, "apt.txt", "git\nzsh # removed but configs left: rc, not installed\n\ntmux\n")
+	tg := writeManifest(t, "apt.txt", "git\nzsh # removed but configs left: rc, not installed\n\ntmux\n")
 	p := New(r, "linux")
 	if m := p.Manager(tg); m != "apt" {
 		t.Fatalf("manager %s", m)
@@ -139,7 +140,7 @@ func TestApt(t *testing.T) {
 
 func TestDnfIsPickedWhenAptIsAbsent(t *testing.T) {
 	r := &sh.Fake{Programs: []string{"dnf"}, Out: map[string]string{"rpm -qa --qf %{NAME}": "git\n"}}
-	tg := manifest(t, "dnf.txt", "git\nfish\n")
+	tg := writeManifest(t, "dnf.txt", "git\nfish\n")
 	p := New(r, "linux")
 	if m := p.Manager(tg); m != "dnf" {
 		t.Fatalf("manager %s", m)
@@ -156,7 +157,7 @@ func TestWinget(t *testing.T) {
 		Out:      map[string]string{"winget list --id Git.Git --exact --accept-source-agreements --disable-interactivity": "Git  Git.Git  2.47"},
 		Err:      map[string]error{"winget list --id wez.wezterm --exact --accept-source-agreements --disable-interactivity": errors.New("exit status 1")},
 	}
-	tg := manifest(t, "winget.json", `{"Sources":[{"Packages":[{"PackageIdentifier":"Git.Git"},{"PackageIdentifier":"wez.wezterm"}]}]}`)
+	tg := writeManifest(t, "winget.json", `{"Sources":[{"Packages":[{"PackageIdentifier":"Git.Git"},{"PackageIdentifier":"wez.wezterm"}]}]}`)
 	actions, err := New(r, "windows").Plan(context.Background(), tg)
 	if err != nil || strings.Join(resources(actions), ",") != "CREATE winget:wez.wezterm" {
 		t.Fatalf("plan %v %v", resources(actions), err)
@@ -182,7 +183,7 @@ func TestItemsCarryStateVersionAndDescription(t *testing.T) {
 			{"name": "sketchybar", "full_name": "felixkratz/formulae/sketchybar", "desc": "Custom macOS statusbar",
 			"installed": [{"version": "2.22.1"}]}],
 		"casks": []}`
-	items, err := New(r, "darwin").Items(context.Background(), manifest(t, "Brewfile", brewfile))
+	items, err := New(r, "darwin").Items(context.Background(), writeManifest(t, "Brewfile", brewfile))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -207,7 +208,7 @@ func TestItemsCarryStateVersionAndDescription(t *testing.T) {
 
 func TestItemsWithoutDetailsStillList(t *testing.T) {
 	r := brewMachine() // no brew info answer: details fail, items do not
-	items, err := New(r, "darwin").Items(context.Background(), manifest(t, "Brewfile", `brew "git"`))
+	items, err := New(r, "darwin").Items(context.Background(), writeManifest(t, "Brewfile", `brew "git"`))
 	if err != nil || len(items) != 1 || items[0].State != "in place" || items[0].Version != "" {
 		t.Fatalf("items %+v %v", items, err)
 	}
@@ -218,7 +219,7 @@ func TestAptItemsReadDpkg(t *testing.T) {
 		"dpkg-query -W -f ${db:Status-Abbrev}\t${Package}":                        "ii \tgit\n",
 		"dpkg-query -W -f ${Package}\t${Version}\t${binary:Summary}\t${Homepage}": "git\t1:2.43.0\tfast, scalable, distributed revision control system\thttps://git-scm.com/\n",
 	}}
-	items, err := New(r, "linux").Items(context.Background(), manifest(t, "apt.txt", "git\ncurl\n"))
+	items, err := New(r, "linux").Items(context.Background(), writeManifest(t, "apt.txt", "git\ncurl\n"))
 	if err != nil || len(items) != 2 || items[0].Version != "1:2.43.0" || items[0].Homepage != "https://git-scm.com/" || items[1].State != "missing" {
 		t.Fatalf("items %+v %v", items, err)
 	}
@@ -236,7 +237,7 @@ func TestItemsShowUpdatesAndUndeclared(t *testing.T) {
 	r.Out["brew list --cask -1 --full-name"] = "raycast\n"
 	r.Out["mas list"] = "1352778147  Bitwarden  (2026.9.1)\n640199958  Developer  (11.1)\n"
 	r.Out["mas outdated"] = "1352778147 Bitwarden (2026.9.1 -> 2026.10.0)\n"
-	items, err := New(r, "darwin").Items(context.Background(), manifest(t, "Brewfile", brewfile))
+	items, err := New(r, "darwin").Items(context.Background(), writeManifest(t, "Brewfile", brewfile))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -262,7 +263,7 @@ func TestUpgradeIsOptIn(t *testing.T) {
 	r := brewMachine()
 	r.Out["brew outdated --json=v2"] = outdatedJSON
 	r.Out["mas outdated"] = ""
-	tg := manifest(t, "Brewfile", `brew "git"`+"\n"+`brew "tmux"`)
+	tg := writeManifest(t, "Brewfile", `brew "git"`+"\n"+`brew "tmux"`)
 	r.Out["brew list --formula -1 --full-name"] += "tmux\n"
 	if actions, _ := New(r, "darwin").Plan(context.Background(), tg); len(actions) != 0 {
 		t.Fatalf("plan without upgrade %v", resources(actions))
@@ -284,7 +285,7 @@ func TestCaptureWritesABrewfile(t *testing.T) {
 	r.Out["brew tap"] = "homebrew/core\nfelixkratz/formulae\n"
 	r.Out["brew leaves --installed-on-request"] = "git\n"
 	r.Out["brew list --cask -1 --full-name"] = "ghostty\n"
-	got, err := New(r, "darwin").Capture(context.Background(), manifest(t, "Brewfile", ""))
+	got, err := New(r, "darwin").Capture(context.Background(), writeManifest(t, "Brewfile", ""))
 	want := "# Captured by zc-workstation from what this machine has installed.\n" +
 		"tap \"felixkratz/formulae\"\nbrew \"git\"\ncask \"ghostty\"\nmas \"Bitwarden\", id: 1352778147\n"
 	if err != nil || string(got) != want {
@@ -308,5 +309,27 @@ func TestAptAndDnfUpdates(t *testing.T) {
 	d, err := dnfOutdated(context.Background(), r)
 	if err != nil || len(d) != 1 || d["dnf:git"].To != "2.45.2-1.fc40" {
 		t.Fatalf("dnf %v %v", d, err)
+	}
+}
+
+func TestAddDeclaresUnderASectionWithItsTap(t *testing.T) {
+	tg := writeManifest(t, "Brewfile", "tap \"a/b\"\n\n# Git\nbrew \"git\" # version control\n")
+	p := New(brewMachine(), "darwin")
+	if err := p.Add(tg, provider.Entry{Name: "lazygit"}); err == nil || !strings.Contains(err.Error(), "choose a section: Git") {
+		t.Fatalf("no section: %v", err)
+	}
+	if err := p.Add(tg, provider.Entry{Kind: "brew", Name: "git", Section: "Git"}); err == nil {
+		t.Fatal("duplicate added")
+	}
+	if err := p.Add(tg, provider.Entry{Name: "cirruslabs/cli/tart", Section: "git", Why: "macOS VMs"}); err != nil {
+		t.Fatal(err)
+	}
+	b, _ := os.ReadFile(tg.File)
+	if want := "tap \"a/b\"\ntap \"cirruslabs/cli\"\n\n# Git\nbrew \"git\" # version control\nbrew \"cirruslabs/cli/tart\" # macOS VMs\n"; string(b) != want {
+		t.Fatalf("Brewfile:\n%s", b)
+	}
+	items, err := p.Items(context.Background(), tg)
+	if err != nil || items[2].Why != "version control" || items[2].Section != "Git" {
+		t.Fatalf("items %+v %v", items, err)
 	}
 }

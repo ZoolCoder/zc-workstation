@@ -11,6 +11,8 @@ import (
 	"testing"
 
 	"github.com/zoolcoder/zc-workstation/internal/config"
+	"github.com/zoolcoder/zc-workstation/internal/engine"
+	"github.com/zoolcoder/zc-workstation/internal/manifest"
 )
 
 // fixture writes a config with one pruned target and returns its path and the
@@ -189,5 +191,53 @@ func TestCaptureWritesOnlyANewFileUnlessForced(t *testing.T) {
 	}
 	if got, _ := os.ReadFile(out); string(got) != "x\n" {
 		t.Fatalf("forced write %q", got)
+	}
+}
+
+func TestAddWritesTheManifestOnly(t *testing.T) {
+	root := t.TempDir()
+	cfg := filepath.Join(root, name+".yaml")
+	brewfile := filepath.Join(root, "Brewfile")
+	_ = os.WriteFile(cfg, []byte("version: 1\ntargets:\n  - {name: pkgs, provider: packages, manager: brew, file: Brewfile}\n"), 0o600)
+	_ = os.WriteFile(brewfile, []byte("# Tools\nbrew \"git\"\n"), 0o600)
+	if _, err := run(t, "", "add", "-config", cfg, "-target", "pkgs", "cask:raycast"); err == nil {
+		t.Fatal("added without -why")
+	}
+	out, err := run(t, "", "add", "-config", cfg, "-target", "pkgs", "-section", "Tools", "-why", "launcher", "cask:raycast")
+	if err != nil || !strings.Contains(out, "plan -target pkgs") {
+		t.Fatalf("add: %v\n%s", err, out)
+	}
+	if b, _ := os.ReadFile(brewfile); string(b) != "# Tools\nbrew \"git\"\ncask \"raycast\" # launcher\n" {
+		t.Fatalf("Brewfile:\n%s", b)
+	}
+}
+
+func TestAdocGroupsBySectionAndLinksHomepages(t *testing.T) {
+	var b bytes.Buffer
+	rows := []engine.TargetItems{
+		{Target: "pkgs", Provider: "packages", Items: []engine.Item{
+			{Name: "a/b", Kind: "tap"},
+			{Name: "jq", Kind: "brew", Homepage: "https://jqlang.org", Version: "1.8", Note: manifest.Note{Section: "Data", Why: "JSON a|b"}},
+			{Name: "old", Kind: "brew", State: engine.Extra},
+		}},
+		{Target: "home", Provider: "dotfiles", Items: []engine.Item{{Name: ".zshrc", Kind: "dotfile"}}},
+		{Target: "runtimes", Provider: "tools", Items: []engine.Item{{Name: "go", Kind: "runtime", Desc: "requested latest"}, {Name: "go", Kind: "runtime", Version: "1.25"}}},
+	}
+	if err := writeAdoc(&b, rows); err != nil {
+		t.Fatal(err)
+	}
+	out := b.String()
+	for _, want := range []string{"== Data", "|https://jqlang.org[jq] |JSON a\\|b\n", "== runtimes", "|go |requested latest"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("missing %q:\n%s", want, out)
+		}
+	}
+	if strings.Count(out, "|go ") != 1 {
+		t.Fatalf("go twice:\n%s", out)
+	}
+	for _, not := range []string{"a/b", "old", ".zshrc", "1.8", "1.25"} {
+		if strings.Contains(out, not) {
+			t.Fatalf("has %q:\n%s", not, out)
+		}
 	}
 }

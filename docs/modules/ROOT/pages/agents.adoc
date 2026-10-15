@@ -9,6 +9,7 @@
 |===
 | `status` | Live state per target. Read-only.
 | `list` | Every declared item with its state, version, newer version and app, then what is installed but not declared. Takes `state` and `kind` filters. Read-only.
+| `add` | Declare a package or runtime in one target's manifest, with its why and section. Edits the manifest only.
 | `capture` | The manifest one target would declare to match this machine. Writes nothing. Read-only.
 | `validate` | Check the config offline. Read-only.
 | `plan` | Plan and save it. Returns a `plan_id`. Changes nothing.
@@ -32,8 +33,37 @@ $ claude plugin install zc-workstation
 
 * `setup` installs the binary, writes a config and runs `doctor`.
 * `plan-apply` plans, explains, asks for a yes, and applies that plan by id.
+* `add-software` turns "install X" or "I need a tool for Y" into a manifest
+  entry: it picks the package, writes it with `add` under a section with a
+  why, then plans and applies after a yes. Nothing is installed by hand, so
+  the next machine gets it too.
+* `review` reads `doctor` and `list`, then reports what is new in the tools
+  you rely on, what is broken or drifted, and up to three ideas. It changes
+  nothing until you pick.
+* Slash commands: `/zc-workstation:plan`, `/zc-workstation:apply`,
+  `/zc-workstation:doctor`, `/zc-workstation:add <tool or need>` and
+  `/zc-workstation:review`.
 * The `PreToolUse` hook asks before any `apply` with `-yes` or without a
   saved plan file.
+
+== What is new after an update
+
+`review` reports features worth trying in the versions you moved to. It reads
+the release notes between the old and the new version, from GitHub releases
+when the homepage is on GitHub, and keeps only what touches each item's why.
+
+To know what an update moved, save the outdated list just before upgrading.
+`review` reads the newest file in
+`$XDG_STATE_HOME/zc-workstation/upgrades/`, by default
+`~/.local/state/zc-workstation/upgrades/`:
+
+[source,bash]
+----
+dir="${XDG_STATE_HOME:-$HOME/.local/state}/zc-workstation/upgrades"
+mkdir -p "$dir"
+zc-workstation list -json -state outdated > "$dir/$(date +%F).json"
+brew upgrade && mise upgrade
+----
 
 == Other agents
 
