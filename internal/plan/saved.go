@@ -15,7 +15,10 @@ type Saved struct {
 	Version int `json:"version"`
 	// Targets is the -target selection the plan was made with; empty means
 	// every target.
-	Targets []string      `json:"targets,omitempty"`
+	Targets []string `json:"targets,omitempty"`
+	// Upgrade and Only are the -upgrade and -only flags the plan was made with.
+	Upgrade bool          `json:"upgrade,omitempty"`
+	Only    []string      `json:"only,omitempty"`
 	Actions []SavedAction `json:"actions"`
 }
 
@@ -35,10 +38,13 @@ func (p Plan) Snapshot(targets []string) Saved {
 }
 
 // Save writes the plan, made for the given targets, for a later apply.
-func (p Plan) Save(w io.Writer, targets []string) error {
+func (p Plan) Save(w io.Writer, targets []string) error { return p.Snapshot(targets).Write(w) }
+
+// Write writes the saved plan as indented JSON.
+func (s Saved) Write(w io.Writer) error {
 	enc := json.NewEncoder(w)
 	enc.SetIndent("", "  ")
-	return enc.Encode(p.Snapshot(targets))
+	return enc.Encode(s)
 }
 
 func (p Plan) savedActions() []SavedAction {

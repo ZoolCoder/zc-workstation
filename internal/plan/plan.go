@@ -63,6 +63,15 @@ func (p Plan) filter(keep func(Action) bool) []Action {
 	return out
 }
 
+// Only is the plan cut down to the actions on these resources; with none, it
+// is the whole plan.
+func (p Plan) Only(resources []string) Plan {
+	if len(resources) == 0 {
+		return p
+	}
+	return Plan{Actions: p.filter(func(a Action) bool { return slices.Contains(resources, a.Resource) })}
+}
+
 // Manual returns the actions no tool can perform.
 func (p Plan) Manual() []Action { return p.filter(func(a Action) bool { return a.Op == OpManual }) }
 

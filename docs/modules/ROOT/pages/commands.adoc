@@ -33,6 +33,8 @@
 | `-section NAME` | `add`: the manifest section to add it under; a new name starts a new section.
 | `-json` | `plan`, `status`, `list` and `doctor`: machine-readable.
 | `-exit-code` | `plan`: exit 2 for changes, 3 for manual-only.
+| `-upgrade` | `plan`, `apply`: also upgrade outdated packages and runtimes, as if every `packages` and `tools` target said `upgrade: true`.
+| `-only RESOURCE` | `plan`, `apply`: only the change to this resource, such as `brew:tmux`; repeat for several. A saved plan remembers `-upgrade` and `-only`.
 | `-yes` | `apply`: skip the confirmation prompt for deletions.
 |===
 

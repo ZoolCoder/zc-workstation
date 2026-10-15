@@ -153,7 +153,13 @@ func (e *Engine) Apply(ctx context.Context, p plan.Plan, w io.Writer) error {
 	if err != nil {
 		return fmt.Errorf("verify: %w", err)
 	}
-	if left := after.Executable(); len(left) > 0 {
+	// Only what this plan changed is checked: a plan cut down with -only
+	// leaves the rest outstanding on purpose.
+	applied := make([]string, 0, len(p.Actions))
+	for _, a := range p.Actions {
+		applied = append(applied, a.Resource)
+	}
+	if left := after.Only(applied).Executable(); len(left) > 0 {
 		return fmt.Errorf("applied, but %d change(s) are still outstanding; run plan to see them", len(left))
 	}
 	_, err = fmt.Fprintln(w, "applied and verified")

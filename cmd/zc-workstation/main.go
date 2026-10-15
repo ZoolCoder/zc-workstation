@@ -68,6 +68,9 @@ Flags:
   -target value    limit to this target; repeat for several
   -yes             skip the confirmation prompt for deletions
   -exit-code       plan: exit 2 for changes, 3 for manual-only
+  -upgrade         plan and apply: also upgrade outdated packages and runtimes
+  -only value      plan and apply: only the change to this resource, such as
+                   brew:tmux; repeat for several
   -json            plan, status and list: machine-readable
   -out string      plan: save the plan, to apply exactly what you reviewed;
                    capture: write the manifest to this file, not stdout
@@ -147,8 +150,10 @@ func runCLI(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	states := flags.String("state", "", "list: only these states")
 	kinds := flags.String("kind", "", "list: only these kinds")
 	adoc := flags.Bool("adoc", false, "list: the declared packages and runtimes as an AsciiDoc page")
-	var targets targetList
+	upgrade := flags.Bool("upgrade", false, "also upgrade outdated packages and runtimes")
+	var targets, only targetList
 	flags.Var(&targets, "target", "limit to this target")
+	flags.Var(&only, "only", "only the change to this resource")
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
@@ -176,7 +181,16 @@ func runCLI(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 		} else if !slices.Equal(targets, s.Targets) {
 			return fmt.Errorf("this plan was saved for -target %v; apply it with the same selection, or none", s.Targets)
 		}
+		if len(only) == 0 {
+			only = s.Only
+		} else if !slices.Equal(only, s.Only) {
+			return fmt.Errorf("this plan was saved for -only %v; apply it with the same selection, or none", s.Only)
+		}
+		*upgrade = *upgrade || s.Upgrade
 		saved = &s
+	}
+	if *upgrade {
+		upgradeAll(&cfg)
 	}
 
 	// Installers talk through this command's streams, never the process's:
@@ -206,8 +220,11 @@ func runCLI(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	if err != nil {
 		return err
 	}
+	p = p.Only(only)
 	if cmd == "plan" {
-		return runPlan(p, targets, *out, *asJSON, *exitCode, stdout, stderr)
+		s := p.Snapshot(targets)
+		s.Upgrade, s.Only = *upgrade, only
+		return runPlan(p, s, *out, *asJSON, *exitCode, stdout, stderr)
 	}
 
 	if saved != nil {
@@ -233,7 +250,17 @@ func runCLI(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	return eng.Apply(ctx, p, stdout)
 }
 
-func runPlan(p plan.Plan, targets []string, out string, asJSON, exitCode bool, stdout, stderr io.Writer) error {
+// upgradeAll makes every target that can upgrade do so, as if its config said
+// upgrade: true.
+func upgradeAll(cfg *config.Config) {
+	for i, t := range cfg.Targets {
+		if t.Provider == "packages" || t.Provider == "tools" {
+			cfg.Targets[i].Upgrade = true
+		}
+	}
+}
+
+func runPlan(p plan.Plan, saved plan.Saved, out string, asJSON, exitCode bool, stdout, stderr io.Writer) error {
 	write := p.Write
 	if asJSON {
 		write = p.WriteJSON
@@ -242,7 +269,7 @@ func runPlan(p plan.Plan, targets []string, out string, asJSON, exitCode bool, s
 		return err
 	}
 	if out != "" {
-		if err := savePlan(p, targets, out); err != nil {
+		if err := savePlan(saved, out); err != nil {
 			return err
 		}
 		// With -json, stdout is the document; the notice must not break it.
@@ -316,7 +343,7 @@ func findConfig(flagValue string) string {
 	return local
 }
 
-func savePlan(p plan.Plan, targets []string, path string) error {
+func savePlan(s plan.Saved, path string) error {
 	// 0600: a plan names paths and resources, which is nobody else's
 	// business on a shared machine.
 	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
@@ -324,7 +351,7 @@ func savePlan(p plan.Plan, targets []string, path string) error {
 		return fmt.Errorf("save plan: %w", err)
 	}
 	defer func() { _ = f.Close() }()
-	return p.Save(f, targets)
+	return s.Write(f)
 }
 
 func readSavedPlan(path string) (plan.Saved, error) {

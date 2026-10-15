@@ -76,6 +76,31 @@ func TestSavedPlanRefusesWhenTheWorldMoved(t *testing.T) {
 	}
 }
 
+func TestOnlyKeepsOneChangeAndASavedPlanRemembersIt(t *testing.T) {
+	cfg, dir := fixture(t)
+	body := "version: 1\ntargets:\n  - name: notes\n    provider: localdir\n    path: out\n    files:\n      a.txt: A\n      b.txt: B\n"
+	if err := os.WriteFile(cfg, []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	saved := filepath.Join(t.TempDir(), "plan.json")
+	out, err := run(t, "", "plan", "-config", cfg, "-only", "b.txt", "-upgrade", "-out", saved)
+	if err != nil || strings.Contains(out, "a.txt") || !strings.Contains(out, "b.txt") {
+		t.Fatalf("plan -only: %v\n%s", err, out)
+	}
+	if _, err := run(t, "", "apply", "-config", cfg, "-only", "a.txt", saved); err == nil {
+		t.Fatal("different -only accepted")
+	}
+	if out, err := run(t, "", "apply", "-config", cfg, saved); err != nil {
+		t.Fatalf("apply saved: %v\n%s", err, out)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "a.txt")); err == nil {
+		t.Fatal("a.txt written, though the plan was only b.txt")
+	}
+	if b, _ := os.ReadFile(filepath.Join(dir, "b.txt")); string(b) != "B" {
+		t.Fatalf("b.txt %q", b)
+	}
+}
+
 func TestDeletionsNeedAYes(t *testing.T) {
 	cfg, dir := fixture(t)
 	_ = os.MkdirAll(dir, 0o755)
