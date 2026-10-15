@@ -11,8 +11,10 @@ swift build --package-path "$here" -c release
 bin=$(swift build --package-path "$here" -c release --show-bin-path)
 
 rm -rf "$out"
-mkdir -p "$out/Contents/MacOS"
+mkdir -p "$out/Contents/MacOS" "$out/Contents/Resources"
 cp "$bin/ZCBar" "$out/Contents/MacOS/ZCBar"
+# The icons icon/make-icon.swift draws from the ZoolCoder mark.
+cp "$here"/Resources/AppIcon.icns "$here"/Resources/MenuBarMark.pdf "$out/Contents/Resources/"
 cat >"$out/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -23,6 +25,7 @@ cat >"$out/Contents/Info.plist" <<PLIST
     <key>CFBundleIdentifier</key><string>dev.zoolcoder.zcbar</string>
     <key>CFBundleExecutable</key><string>ZCBar</string>
     <key>CFBundlePackageType</key><string>APPL</string>
+    <key>CFBundleIconFile</key><string>AppIcon</string>
     <key>CFBundleShortVersionString</key><string>${version}</string>
     <key>CFBundleVersion</key><string>${version}</string>
     <key>LSMinimumSystemVersion</key><string>14.0</string>

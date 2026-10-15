@@ -6,7 +6,7 @@ BIN := bin/zc-workstation
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null | sed 's/^v//')-dev
 LDFLAGS := -X main.version=$(VERSION)
 
-.PHONY: all build run ui test test-unit race cover lint fmt install app app-test app-install evals docs docs-serve clean
+.PHONY: all build run ui test test-unit race cover lint fmt install app app-icon app-test app-install evals docs docs-serve clean
 
 all: lint test build
 
@@ -53,6 +53,10 @@ APP := bin/ZCBar.app
 
 app:
 	VERSION=$(VERSION) apps/menubar/package.sh $(APP)
+
+# Redraws the app's icons from apps/menubar/icon/mark.svg.
+app-icon:
+	swift apps/menubar/icon/make-icon.swift apps/menubar/Resources
 
 app-test:
 	swift test --package-path apps/menubar
