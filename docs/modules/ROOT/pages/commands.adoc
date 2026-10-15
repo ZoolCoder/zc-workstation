@@ -12,7 +12,7 @@
 | `add ITEM` | Declare a package or runtime in one target's manifest, with why it is there. Installs nothing; `plan` and `apply` do.
 | `capture` | Print the manifest one target would declare to match this machine. Needs `-target`.
 | `validate` | Check the config offline.
-| `doctor` | Machine health: binary, system, config, the programs targets need, and each target.
+| `doctor` | Machine health: binary, system, config, the programs targets need, and each target. On macOS it also warns about weak security settings, each with its fix: FileVault, the firewall and stealth mode, the screen lock, Gatekeeper, SIP, automatic and security updates, File Sharing, Touch ID for sudo, and servers listening on every network interface.
 | `ui` | The xref:ui.adoc[dashboard].
 | `mcp` | The MCP server on standard input and output.
 | `version` | The version.

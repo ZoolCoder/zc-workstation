@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 
@@ -104,7 +105,10 @@ func TestValidateDoctorVersionAndErrors(t *testing.T) {
 	var report struct {
 		Checks []struct{ Name, Status string }
 	}
-	if jerr := json.Unmarshal([]byte(out[:strings.LastIndex(out, "}")+1]), &report); jerr != nil || len(report.Checks) != 4 {
+	jerr := json.Unmarshal([]byte(out[:strings.LastIndex(out, "}")+1]), &report)
+	// The security checks run on macOS only and read this machine, so they are not counted.
+	install := slices.DeleteFunc(report.Checks, func(c struct{ Name, Status string }) bool { return strings.HasPrefix(c.Name, "security ") })
+	if jerr != nil || len(install) != 4 {
 		t.Fatalf("doctor: %v %v\n%s", err, jerr, out)
 	}
 	if out, _ := run(t, "", "version"); out != "dev\n" {

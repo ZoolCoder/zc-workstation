@@ -54,7 +54,7 @@ func mcpServer(stateDir string) *mcp.Server {
 				Cmd: []string{"plan"}, Props: []mcp.Prop{cfg, target}, Tail: []string{"-json"}, Plan: true},
 			{Name: "apply", Desc: "Apply a plan the user reviewed and approved, by its plan_id. Refuses when live state moved since the plan.",
 				Props: []mcp.Prop{mcp.Req("plan_id", "string", "the plan_id plan returned", "")}, Write: true, Apply: true},
-			{Name: "doctor", Desc: "Install health: binary, config, targets. Read-only.",
+			{Name: "doctor", Desc: "Install health: binary, config, targets, and on macOS security settings. Read-only.",
 				Cmd: []string{"doctor"}, Props: []mcp.Prop{cfg}, Tail: []string{"-json"}},
 		},
 		Prompts:  mcp.Skills(skills.FS),

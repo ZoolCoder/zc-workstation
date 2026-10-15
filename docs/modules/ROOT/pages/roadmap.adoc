@@ -154,20 +154,24 @@ zc-workstation/
 |Untrusted configs stay a `MANUAL` step.
 
 |`settings` and `services` providers
-|Not started
-|macOS `defaults`, launchd agents; later systemd timers and Task Scheduler.
+|Done on macOS
+|macOS `defaults`, Homebrew services and launchd agents; later gsettings, systemd timers and Task Scheduler.
+
+|Security checks in `doctor`
+|Done on macOS
+|`doctor.sh`'s FileVault, firewall, screen lock, Gatekeeper, SIP, update, File Sharing, Touch ID and exposed-server checks, as warnings with their fix.
 
 |`list`, `capture`, upgrades
 |Done
 |`list` shows outdated and undeclared packages and runtimes in about two seconds. `capture` writes a Brewfile, package list or mise config from the machine. `upgrade: true` plans upgrades per target.
 
-|aurora-mac links as chezmoi source
+|aurora-mac config moved to a private config repo
 |Done
-|aurora-mac's private repo has a `home/` source with one `symlink_` entry per `link` line in `install.sh`, 29 in all. On this Mac the plan reads 29 of 29 in place with no changes, and an apply to an empty home rebuilds every link. The config stays in aurora-mac, private, so nothing personal enters this repo.
+|A private zc-workstation-config repo holds the Brewfile, the mise config and a chezmoi `home/` source, so nothing personal enters this repo.
 
 |aurora-mac steps beyond links
-|Not started
-|`install.sh` also seeds btop and k9s configs, imports CodexBar preferences, sets the git identity, hooks and signing key, merges VS Code settings, copies IntelliJ options, edits `gradle.properties`, renders wallpapers, fills in launchd jobs and runs `macos.sh`. These belong to the `settings` and `services` providers or to chezmoi `run_onchange_` scripts.
+|Done
+|The git identity, hooks and signing key, app settings (VS Code, IntelliJ, Chrome, CodexBar), `gradle.properties`, git maintenance and Claude Notify are chezmoi `run_onchange_` scripts in the config repo; macOS defaults and background services are `settings` and `services` targets.
 
 |CI on macOS, Linux and Windows runners
 |Configured

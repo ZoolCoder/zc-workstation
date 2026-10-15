@@ -1,0 +1,123 @@
+// Package security checks that a lost or unlocked Mac does not expose code,
+// keys and sessions: disk encryption, the firewall, the screen lock, system
+// protections, updates, and servers reachable from the network. It only
+// reads; each failed check says how to fix it.
+package security
+
+import (
+	"context"
+	"os"
+	"regexp"
+	"slices"
+	"strings"
+
+	"github.com/zoolcoder/zc-workstation/internal/sh"
+)
+
+// Result is one check: ok, or the fix.
+type Result struct {
+	Name   string
+	OK     bool
+	Detail string
+	// Warn marks a finding to look at rather than a failure.
+	Warn bool
+}
+
+const firewall = "/usr/libexec/ApplicationFirewall/socketfilterfw"
+
+type check struct {
+	name, fix string
+	cmd       []string
+	pass      func(out string) bool
+}
+
+func contains(s string) func(string) bool {
+	return func(out string) bool { return strings.Contains(out, s) }
+}
+
+var checks = []check{
+	{"FileVault disk encryption", "turn FileVault on in System Settings, Privacy & Security",
+		[]string{"fdesetup", "status"}, contains("FileVault is On")},
+	{"firewall", "sudo " + firewall + " --setglobalstate on",
+		[]string{firewall, "--getglobalstate"}, contains("is enabled")},
+	{"firewall stealth mode", "sudo " + firewall + " --setstealthmode on",
+		[]string{firewall, "--getstealthmode"}, contains("mode is on")},
+	// sysadminctl prints its answer to standard error.
+	{"password after sleep or screen saver", "System Settings, Lock Screen: require a password immediately",
+		[]string{"/bin/sh", "-c", "sysadminctl -screenLock status 2>&1"},
+		func(out string) bool {
+			return strings.Contains(out, "screenLock") && !strings.Contains(out, "screenLock is off")
+		}},
+	{"Gatekeeper", "sudo spctl --global-enable",
+		[]string{"spctl", "--status"}, contains("assessments enabled")},
+	{"System Integrity Protection", "start up in Recovery and run csrutil enable",
+		[]string{"csrutil", "status"}, contains("status: enabled")},
+	{"automatic update checks", "sudo softwareupdate --schedule on",
+		[]string{"softwareupdate", "--schedule"}, contains("turned on")},
+	{"security updates install on their own", "System Settings, General, Software Update, Automatic updates: turn on security responses",
+		[]string{"/bin/sh", "-c", "defaults read /Library/Preferences/com.apple.SoftwareUpdate CriticalUpdateInstall; defaults read /Library/Preferences/com.apple.SoftwareUpdate ConfigDataInstall"},
+		func(out string) bool {
+			return strings.Fields(out) != nil && slices.Equal(strings.Fields(out), []string{"1", "1"})
+		}},
+	{"File Sharing off", "sudo launchctl disable system/com.apple.smbd",
+		[]string{"netstat", "-an", "-p", "tcp"},
+		func(out string) bool { return !smb.MatchString(out) }},
+}
+
+var (
+	smb = regexp.MustCompile(`[.:]445 .*LISTEN`)
+	// touchID is the line sudo_local.template ships commented out.
+	touchID = regexp.MustCompile(`(?m)^auth\s+sufficient\s+pam_tid\.so`)
+)
+
+// Checker runs the checks through r; pam is the sudo PAM file that enables
+// Touch ID.
+type Checker struct {
+	r   sh.Runner
+	pam string
+}
+
+func New(r sh.Runner) Checker { return Checker{r: r, pam: "/etc/pam.d/sudo_local"} }
+
+// Run runs every check, in a fixed order.
+func (c Checker) Run(ctx context.Context) []Result {
+	var results []Result
+	for _, ch := range checks {
+		out, err := c.r.Output(ctx, ch.cmd[0], ch.cmd[1:]...)
+		results = append(results, result(ch.name, err == nil && ch.pass(string(out)), ch.fix))
+	}
+	pam, _ := os.ReadFile(c.pam)
+	results = append(results, result("Touch ID for sudo", touchID.Match(pam),
+		`sed "s/^#auth/auth/" /etc/pam.d/sudo_local.template | sudo tee /etc/pam.d/sudo_local`))
+	return append(results, c.exposed(ctx))
+}
+
+func result(name string, ok bool, fix string) Result {
+	if ok {
+		return Result{Name: name, OK: true}
+	}
+	return Result{Name: name, Detail: fix}
+}
+
+// exposed lists servers listening on every network interface, which any
+// network you join can reach; a dev server is safer on 127.0.0.1. rapportd is
+// macOS's own Continuity service.
+func (c Checker) exposed(ctx context.Context) Result {
+	const name = "servers on every network interface"
+	// lsof exits 1 when nothing listens.
+	out, _ := c.r.Output(ctx, "lsof", "-nP", "-iTCP", "-sTCP:LISTEN")
+	var found []string
+	for _, line := range strings.Split(string(out), "\n")[1:] {
+		f := strings.Fields(line)
+		if len(f) < 9 || f[0] == "rapportd" || !strings.HasPrefix(f[8], "*:") {
+			continue
+		}
+		if s := f[0] + ":" + strings.TrimPrefix(f[8], "*:"); !slices.Contains(found, s) {
+			found = append(found, s)
+		}
+	}
+	if len(found) == 0 {
+		return Result{Name: name, OK: true}
+	}
+	return Result{Name: name, Warn: true, Detail: strings.Join(found, " ") + "; bind dev servers to 127.0.0.1"}
+}

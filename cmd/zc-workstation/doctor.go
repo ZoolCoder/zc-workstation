@@ -13,10 +13,12 @@ import (
 	"github.com/zoolcoder/toolshell/doctor"
 	"github.com/zoolcoder/zc-workstation/internal/config"
 	"github.com/zoolcoder/zc-workstation/internal/engine"
+	"github.com/zoolcoder/zc-workstation/internal/security"
+	"github.com/zoolcoder/zc-workstation/internal/sh"
 )
 
 // runDoctor checks the install: the binary on PATH, the config, and that
-// every target's live state can be read.
+// every target's live state can be read. On a Mac it also checks security.
 func runDoctor(args []string, _ io.Reader, stdout, stderr io.Writer) error {
 	flags := flag.NewFlagSet("doctor", flag.ContinueOnError)
 	flags.SetOutput(stderr)
@@ -54,6 +56,16 @@ func runDoctor(args []string, _ io.Reader, stdout, stderr io.Writer) error {
 				default:
 					r.Add("target "+st.Target, doctor.Warn, st.Summary)
 				}
+			}
+		}
+	}
+	if runtime.GOOS == "darwin" {
+		for _, res := range security.New(sh.System()).Run(context.Background()) {
+			// A weak setting is the owner's call, not a broken install, so it warns.
+			if res.OK {
+				r.Add("security "+res.Name, doctor.OK, "")
+			} else {
+				r.Add("security "+res.Name, doctor.Warn, res.Detail)
 			}
 		}
 	}
