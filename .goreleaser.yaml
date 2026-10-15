@@ -28,6 +28,26 @@ archives:
 checksum:
   name_template: checksums.txt
 
+# An SPDX SBOM per archive, made by syft.
+sboms:
+  - artifacts: archive
+
+# Keyless cosign: the signature binds checksums.txt to this repository's
+# release workflow through GitHub's OIDC token, with no key to keep.
+# Verify steps: docs/modules/ROOT/pages/security.adoc
+signs:
+  - cmd: cosign
+    signature: "${artifact}.sig"
+    certificate: "${artifact}.pem"
+    args:
+      - sign-blob
+      - "--output-certificate=${certificate}"
+      - "--output-signature=${signature}"
+      - "${artifact}"
+      - --yes
+    artifacts: checksum
+    output: true
+
 # deb, rpm and apk for Linux; `sudo dpkg -i`, `sudo rpm -i` or `sudo apk add --allow-untrusted`
 nfpms:
   - package_name: zc-workstation
