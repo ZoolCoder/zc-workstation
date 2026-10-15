@@ -1,5 +1,8 @@
 <p align="center">
-  <img src="../../.github/mark.png" alt="ZoolCoder" width="96">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="../../.github/mark-dark.png">
+    <img src="../../.github/mark.png" alt="ZoolCoder" width="96">
+  </picture>
 </p>
 
 <h1 align="center">ZCBar and ZC Care</h1>
