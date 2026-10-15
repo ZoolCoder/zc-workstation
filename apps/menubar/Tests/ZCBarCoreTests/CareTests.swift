@@ -1,4 +1,5 @@
 import Foundation
+import ImageIO
 import Testing
 @testable import ZCBarCore
 
@@ -434,4 +435,65 @@ private func write(_ url: URL, bytes: Int) throws {
     #expect(BrowserPrivacy.clear(history) == 0)
     #expect(!FileManager.default.fileExists(atPath: home.path + "/" + chrome + "Default/History"))
     #expect(FileManager.default.fileExists(atPath: home.path + "/" + chrome + "Default/Bookmarks"))
+}
+
+@Test func similarImagesChainCloseNeighboursIntoGroups() {
+    // 0-1 close, 1-2 close, 0-2 far: one chain. 3-4 close. 5 alone.
+    let close: Set<[Int]> = [[0, 1], [1, 2], [3, 4]]
+    let groups = SimilarImages.cluster(count: 6) { close.contains([$0, $1]) ? 0.1 : 0.9 }
+    #expect(groups == [[0, 1, 2], [3, 4]])
+    #expect(SimilarImages.cluster(count: 0) { _, _ in 0 }.isEmpty)
+}
+
+@Test func similarImagesKeepTheMostPixels() {
+    let at = { (name: String, size: Int64) in LargeFile(url: URL(fileURLWithPath: "/p/" + name), size: size, modified: nil) }
+    let pixels = ["small.jpg": 100, "big.jpg": 400, "heavy.png": 100]
+    let ranked = SimilarImages.ranked([at("small.jpg", 10), at("heavy.png", 50), at("big.jpg", 20)]) { pixels[$0.lastPathComponent] ?? 0 }
+    #expect(ranked.map(\.name) == ["big.jpg", "heavy.png", "small.jpg"])
+    let group = SimilarGroup(files: ranked)
+    #expect(group.best.name == "big.jpg")
+    #expect(group.wasted == 60)
+}
+
+/// A JPEG of circles on a gradient; `seed` moves them, an even one makes
+/// another scene, and `side` scales it.
+private func picture(_ url: URL, side: Int, seed: Int) throws {
+    let ctx = try #require(CGContext(data: nil, width: side, height: side, bitsPerComponent: 8, bytesPerRow: 0,
+                                     space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
+    let colors = seed.isMultiple(of: 2)
+        ? [CGColor(red: 0.05, green: 0.05, blue: 0.05, alpha: 1), CGColor(red: 0.9, green: 0.1, blue: 0.1, alpha: 1)]
+        : [CGColor(red: 0.1, green: 0.3, blue: 0.9, alpha: 1), CGColor(red: 0.9, green: 0.8, blue: 0.2, alpha: 1)]
+    let gradient = try #require(CGGradient(colorsSpace: nil, colors: colors as CFArray, locations: nil))
+    ctx.drawLinearGradient(gradient, start: .zero, end: CGPoint(x: side, y: side), options: [])
+    let s = CGFloat(side)
+    if seed.isMultiple(of: 2) {
+        ctx.setFillColor(CGColor(gray: 0.95, alpha: 1))
+        for i in stride(from: 0, to: side, by: side / 12) {
+            ctx.fill(CGRect(x: CGFloat(i), y: 0, width: s / 40, height: s * CGFloat(i % 7 + 3) / 10))
+        }
+    }
+    for i in 0..<5 {
+        let x = CGFloat((i * 37 + seed * 53) % 100) / 100 * s, y = CGFloat((i * 61 + seed * 29) % 100) / 100 * s
+        ctx.setFillColor(CGColor(red: CGFloat(i) / 5, green: 0.1, blue: CGFloat(seed % 3) / 3, alpha: 1))
+        ctx.fillEllipse(in: CGRect(x: x, y: y, width: s / 4, height: s / 4))
+    }
+    let image = try #require(ctx.makeImage())
+    try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+    let dest = try #require(CGImageDestinationCreateWithURL(url as CFURL, "public.jpeg" as CFString, 1, nil))
+    CGImageDestinationAddImage(dest, image, nil)
+    #expect(CGImageDestinationFinalize(dest))
+}
+
+@Test func similarImagesGroupACopyAndKeepTheLargest() throws {
+    let home = try tempDir()
+    defer { try? FileManager.default.removeItem(at: home) }
+    let pictures = home.appendingPathComponent("Pictures")
+    try picture(pictures.appendingPathComponent("beach.jpg"), side: 1600, seed: 1)
+    try picture(pictures.appendingPathComponent("beach copy.jpg"), side: 900, seed: 1)
+    try picture(pictures.appendingPathComponent("city.jpg"), side: 1600, seed: 4)
+    try picture(home.appendingPathComponent("Pictures/Photos Library.photoslibrary/originals/beach.jpg"), side: 1600, seed: 1)
+    let paths = try FileManager.default.subpathsOfDirectory(atPath: home.path).map { home.path + "/" + $0 }
+
+    let groups = SimilarImages.groups(paths: paths, home: home.path, minimum: 1)
+    #expect(groups.map { $0.files.map(\.name) } == [["beach.jpg", "beach copy.jpg"]])
 }
