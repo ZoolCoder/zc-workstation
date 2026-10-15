@@ -9,8 +9,8 @@ nothing is left and `doctor` passes.
 
 == Before the first plan
 
-A fresh install may have empty package lists, and apt then finds nothing to
-install. Update them once, then install what zc-workstation drives:
+Install what zc-workstation drives. On a fresh install with no package lists
+yet, apply runs `sudo apt-get update` before the first apt install.
 
 [tabs]
 ====

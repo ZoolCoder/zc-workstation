@@ -36,6 +36,9 @@ from the manifest stays installed, because removing software is your call.
 | `winget install --id ID --exact --silent`
 |===
 
+On a machine with no apt package lists yet, such as a fresh install or a
+container, apply runs `sudo apt-get update` before the first install.
+
 For `list` and the Inventory page, versions and descriptions come from
 `brew info --json=v2 --installed` and `mas list` on macOS,
 `dpkg-query` on apt systems, and `rpm -qa` on dnf systems. winget items list
