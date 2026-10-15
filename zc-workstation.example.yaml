@@ -76,6 +76,12 @@ targets:
     services: [colima]
     # agents: [~/Library/LaunchAgents/local.backup.plist]
 
+  # ai declares the MCP servers, rules, skills and Ollama models every AI
+  # agent gets: Claude Code, Codex, Cursor and Gemini CLI.
+  # - name: ai
+  #   provider: agents
+  #   file: agents.yaml
+
   # theme is a second chezmoi source: the ZoolCoder colours for Ghostty, tmux,
   # starship, SketchyBar, JankyBorders, bat, btop, eza, yazi, lazygit and
   # fastfetch. ~/.zshrc.local loads its shell settings.

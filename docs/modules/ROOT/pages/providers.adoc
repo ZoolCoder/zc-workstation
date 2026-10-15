@@ -254,6 +254,62 @@ macOS only. It starts what is stopped and never stops anything.
 * A changed plist is not reloaded. Reload it from a chezmoi `run_onchange_`
   script that hashes the plist.
 
+[#agents]
+== agents
+
+Declares, once, what every AI coding agent gets: MCP servers, a rules file,
+skills, and the models Ollama serves. It writes them into Claude Code, Codex,
+Cursor and Gemini CLI. It adds and updates, and never removes a server, skill
+or model the file does not name.
+
+[source,yaml]
+----
+- name: ai
+  provider: agents
+  file: agents.yaml
+----
+
+`agents.yaml`:
+
+[source,yaml]
+----
+clients: [claude, codex, cursor, gemini]   # leave out for all four
+servers:
+  context7:
+    command: npx
+    args: [-y, "@upstash/context7-mcp@2.1.0"]   # pin a version; doctor warns otherwise
+  github:
+    url: https://api.githubcopilot.com/mcp/
+    headers: {Authorization: "Bearer ${GITHUB_TOKEN}"}
+rules: AGENTS.md          # relative to agents.yaml
+skills: [skills/review]   # folders holding a SKILL.md
+models: [qwen3:8b, nomic-embed-text]
+----
+
+[cols="1,2,2,2"]
+|===
+|Client |MCP servers |Rules |Skills
+
+|claude |`~/.claude.json` |`~/.claude/CLAUDE.md` |`~/.claude/skills`
+|codex |`~/.codex/config.toml` |`~/.codex/AGENTS.md` |`~/.codex/skills`
+|cursor |`~/.cursor/mcp.json` |kept in Cursor's settings |none
+|gemini |`~/.gemini/settings.json` |`~/.gemini/GEMINI.md` |none
+|===
+
+* A server is set by name in `mcpServers`; every other key in the file stays
+  as it was. Each file is replaced in one rename, read again just before the
+  write, so an agent writing it in between keeps its change.
+* Codex reads TOML. Its servers live in a marked block of `config.toml`. A
+  server Codex already declares outside the block is a `MANUAL` step, since a
+  table declared twice breaks the file. An env value written `${NAME}` becomes
+  an `env_vars` entry, which Codex passes through from your shell.
+* The rules file lands in a marked block, so what you wrote around it stays.
+* A skill is in place when every file in its folder matches.
+* A model is in place when `ollama list` shows it; otherwise apply runs
+  `ollama pull`. `ollama serve` must be running. `list` shows each model.
+* Keep keys out of the file: write `${NAME}` and keep the value in the
+  keychain or a password manager. `doctor` warns about plain-text keys.
+
 [#localdir]
 == localdir
 
