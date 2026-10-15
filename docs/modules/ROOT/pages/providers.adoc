@@ -302,6 +302,34 @@ On Linux, `agents` names `.service` and `.timer` files:
 * `services` works on Linux too: Homebrew on Linux runs `brew services` on
   systemd.
 
+[#keyboard]
+== keyboard
+
+Remaps keys on Linux with https://github.com/rvaiya/keyd[keyd], which works
+under X11, Wayland and the console alike. The target installs a keyd config
+as `/etc/keyd/default.conf` and keeps the keyd service enabled and running.
+Linux only, so the target needs `os: [linux]`.
+
+[source,yaml]
+----
+- name: keys
+  provider: keyboard
+  os: [linux]
+  file: assets/keyd/default.conf
+----
+
+`assets/keyd/default.conf` makes Caps Lock Escape when tapped and Hyper
+(Control, Alt, Shift and Super together) when held, as Karabiner does on the
+Mac. Point `file` at your own config for other remaps.
+
+* keyd itself comes from your packages: `keyd` on Debian 13 and Ubuntu
+  25.04 or later, which name the program `keyd.rvaiya`, or the keyd COPR on
+  Fedora. Until it is installed the plan shows a `MANUAL` step.
+* The plan compares the file byte for byte. Apply copies it with
+  `sudo install -m 644`, then runs `keyd reload` when keyd is running.
+* keyd is in place when `systemctl show keyd` reports it enabled and active;
+  otherwise apply runs `sudo systemctl enable --now keyd`.
+
 [#agents]
 == agents
 

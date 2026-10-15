@@ -36,7 +36,7 @@ targets:
 
 | `version` | Always `1`. A future format bumps it.
 | `name` | Lowercase kebab case, unique. `-target` selects by it.
-| `provider` | `packages`, `dotfiles`, `tools`, `desktop`, `settings`, `services` or `localdir`.
+| `provider` | `packages`, `dotfiles`, `tools`, `desktop`, `settings`, `services`, `keyboard`, `agents` or `localdir`.
 | `os` | The systems the target is for: `darwin`, `linux`, `windows`. Empty means every system.
 |===
 
@@ -61,6 +61,7 @@ targets:
 | | `gsettings` | Required on Linux. A GNOME schema, such as `org.gnome.desktop.interface`, to its keys and values: a bool, a number, a string or a list of strings. The target needs `os: [linux]`.
 | `services` | `services` | Homebrew services to keep running. Set this, `agents`, or both. The target needs `os: [darwin]` or `os: [linux]`.
 | | `agents` | launchd agent plists to keep loaded, the label being the file name without `.plist`; on Linux, systemd user `.service` and `.timer` files to keep enabled and active.
+| `keyboard` | `file` | Required. The keyd config to install as `/etc/keyd/default.conf`, such as `assets/keyd/default.conf`. The target needs `os: [linux]`.
 | `localdir` | `path` | Required. The directory to keep.
 | | `files` | File name to content. Names must stay inside `path`.
 | | `prune` | Also delete files in `path` the config does not list.

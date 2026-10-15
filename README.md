@@ -534,7 +534,7 @@ servers; that is Ansible's job.
 ```text
 cmd/zc-workstation/   the CLI: plan, apply, list, add, remove, capture, doctor, ui, mcp
 internal/engine/      config + providers -> one plan; apply, then plan again to verify
-internal/provider/    packages, dotfiles, tools, settings, services, desktop, localdir
+internal/provider/    packages, dotfiles, tools, settings, services, desktop, keyboard, agents, localdir
 internal/plan/        actions, saved plans and their freshness check
 internal/config/      the YAML config and its validation
 internal/ui/          the local dashboard

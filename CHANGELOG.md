@@ -80,6 +80,9 @@ here with what to edit.
 
 ### Providers
 
+- `keyboard` remaps keys on Linux with keyd. `assets/keyd/default.conf`
+  makes Caps Lock Escape on tap and Hyper on hold, as Karabiner does on the
+  Mac.
 - `settings` runs on GNOME: `gsettings` keys under a target with
   `os: [linux]`, such as a dark or light `color-scheme`.
 - `services` runs on Linux: systemd user units and timers under `agents`,

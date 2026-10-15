@@ -91,6 +91,7 @@ zc-workstation/
     tools/                 mise install
     settings/              macOS defaults, GNOME gsettings, Windows registry
     services/              launchd, systemd --user timers, Task Scheduler
+    keyboard/              keyd on Linux
   home/                    chezmoi source state; *.tmpl where the OS changes the file
   packages/
     Brewfile               macOS
@@ -154,8 +155,8 @@ zc-workstation/
 |Untrusted configs stay a `MANUAL` step.
 
 |`settings` and `services` providers
-|Done on macOS
-|macOS `defaults`, Homebrew services and launchd agents; later gsettings, systemd timers and Task Scheduler.
+|Done on macOS and Linux
+|macOS `defaults`, Homebrew services and launchd agents; GNOME gsettings and systemd user units and timers. Task Scheduler and the registry come with Windows.
 
 |Security checks in `doctor`
 |Done on macOS

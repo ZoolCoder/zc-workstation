@@ -101,6 +101,7 @@ targets:
   - {name: gv, provider: settings, os: [linux], gsettings: {org.gnome.x: {k: [1, 2]}}}
   - {name: go, provider: settings, os: [darwin, linux], defaults: {a: {b: 1}}}
   - {name: sm, provider: services, os: [darwin], agents: [a.timer]}
+  - {name: kb, provider: keyboard, os: [darwin]}
 `))
 	if err == nil {
 		t.Fatal("invalid config accepted")
@@ -118,6 +119,7 @@ targets:
 		"target gl: gsettings is required for provider settings on linux", "target gl: defaults does nothing",
 		"target gm: gsettings does nothing", "target gv: org.gnome.x k must be a bool, number, string or list of strings",
 		"target go: provider settings drives one system",
+		"target kb: file is required", "target kb: provider keyboard drives keyd on Linux only",
 	} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("error lacks %q:\n%v", want, err)
