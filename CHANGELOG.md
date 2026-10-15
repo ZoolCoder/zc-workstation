@@ -78,6 +78,8 @@ here with what to edit.
 
 ### Providers
 
+- `settings` runs on GNOME: `gsettings` keys under a target with
+  `os: [linux]`, such as a dark or light `color-scheme`.
 - `services` runs on Linux: systemd user units and timers under `agents`,
   enabled and started with `systemctl --user`.
 - `packages` (brew, mas, apt, dnf, winget), `dotfiles` (chezmoi) and `tools`

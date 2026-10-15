@@ -97,3 +97,57 @@ func TestSame(t *testing.T) {
 		}
 	}
 }
+
+func TestPlanSetsGnomeKeys(t *testing.T) {
+	get := func(schema, key string) string { return sh.Line("gsettings", "get", schema, key) }
+	r := &sh.Fake{Out: map[string]string{
+		get("org.gnome.desktop.interface", "color-scheme"):        "'default'\n",
+		get("org.gnome.desktop.interface", "text-scaling-factor"): "1.25\n",
+		get("org.gnome.desktop.peripherals.keyboard", "delay"):    "uint32 500\n",
+		get("org.gnome.shell", "favorite-apps"):                   "['firefox.desktop']\n",
+	}}
+	p := Provider{r: r, home: "/home/me"}
+	tg := config.Target{Name: "gnome", Provider: "settings", OS: []string{"linux"}, Gsettings: map[string]map[string]any{
+		"org.gnome.desktop.interface":            {"color-scheme": "prefer-dark", "text-scaling-factor": 1.25},
+		"org.gnome.desktop.peripherals.keyboard": {"delay": 500},
+		"org.gnome.shell":                        {"favorite-apps": []any{"firefox.desktop", "org.gnome.Terminal.desktop"}},
+	}}
+	actions, err := p.Plan(context.Background(), tg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, a := range actions {
+		if err := a.Do(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	ran := []string{
+		"gsettings set org.gnome.desktop.interface color-scheme 'prefer-dark'",
+		"gsettings set org.gnome.shell favorite-apps ['firefox.desktop', 'org.gnome.Terminal.desktop']",
+	}
+	if !slices.Equal(r.Ran, ran) {
+		t.Fatalf("ran\n got %q\nwant %q", r.Ran, ran)
+	}
+	if got := p.Programs(tg); !slices.Equal(got, []string{"gsettings"}) {
+		t.Fatalf("programs %v", got)
+	}
+}
+
+func TestSameGVariant(t *testing.T) {
+	for _, c := range []struct {
+		want any
+		have string
+		same bool
+	}{
+		{true, "true", true}, {false, "true", false}, {5, "uint32 5", true}, {5, "int64 6", false},
+		{1.0, "1.0", true}, {0.5, "0.5", true}, {"x", "'x'", true}, {"it's", `"it's"`, true}, {"x", "'y'", false},
+		{[]any{"a", "b"}, "['a', 'b']", true}, {[]any{}, "@as []", true}, {[]any{"a"}, "@as []", false},
+	} {
+		if got := sameGVariant(c.want, c.have); got != c.same {
+			t.Errorf("sameGVariant(%v, %q) = %v", c.want, c.have, got)
+		}
+	}
+	if got := gvariant(`a'b\c`); got != `'a\'b\\c'` {
+		t.Errorf("gvariant quoting %s", got)
+	}
+}

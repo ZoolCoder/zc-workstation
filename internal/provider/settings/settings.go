@@ -1,6 +1,7 @@
-// Package settings keeps macOS preferences, the keys `defaults` reads and
-// writes, at the values the config declares. It never deletes a key: a value
-// the config stops declaring stays as it was.
+// Package settings keeps preferences at the values the config declares: on
+// macOS the keys `defaults` reads and writes, on GNOME the keys of
+// `gsettings`. It never deletes or resets a key: a value the config stops
+// declaring stays as it was.
 package settings
 
 import (
@@ -44,6 +45,8 @@ type key struct {
 	want         any
 	have         string
 	state        string
+	// gnome is a gsettings key: domain is its schema.
+	gnome bool
 }
 
 func (k key) resource() string { return k.domain + " " + k.name }
@@ -56,15 +59,25 @@ func (p Provider) read(ctx context.Context, t config.Target) []key {
 			keys = append(keys, key{domain: domain, name: name, want: p.expand(t.Defaults[domain][name]), state: provider.Missing})
 		}
 	}
+	for _, schema := range slices.Sorted(maps.Keys(t.Gsettings)) {
+		for _, name := range slices.Sorted(maps.Keys(t.Gsettings[schema])) {
+			keys = append(keys, key{domain: schema, name: name, want: p.expand(t.Gsettings[schema][name]), state: provider.Missing, gnome: true})
+		}
+	}
 	var wg sync.WaitGroup
 	for i := range keys {
 		k := &keys[i]
 		wg.Go(func() {
-			// A key that is not set makes defaults fail.
-			if out, err := p.r.Output(ctx, "defaults", "read", k.domain, k.name); err == nil {
+			// A key that is not set makes defaults fail; gsettings fails only
+			// for a schema or key that does not exist.
+			tool, match := "defaults", same
+			if k.gnome {
+				tool, match = "gsettings", sameGVariant
+			}
+			if out, err := p.r.Output(ctx, tool, readArg(tool), k.domain, k.name); err == nil {
 				k.have = strings.TrimSpace(string(out))
 				k.state = provider.Differs
-				if same(k.want, k.have) {
+				if match(k.want, k.have) {
 					k.state = provider.InPlace
 				}
 			}
@@ -75,7 +88,8 @@ func (p Provider) read(ctx context.Context, t config.Target) []key {
 }
 
 // expand turns a leading ~/ in a string value into the home directory, for
-// keys that hold a path. defaults is macOS only, so the path uses slashes.
+// keys that hold a path. defaults and gsettings run on Unix, so the path uses
+// slashes.
 func (p Provider) expand(v any) any {
 	if s, ok := v.(string); ok && strings.HasPrefix(s, "~/") {
 		return path.Join(p.home, s[2:])
@@ -98,6 +112,13 @@ func same(want any, have string) bool {
 		return err == nil && float32(f) == float32(w)
 	}
 	return have == fmt.Sprint(want)
+}
+
+func readArg(tool string) string {
+	if tool == "gsettings" {
+		return "get"
+	}
+	return "read"
 }
 
 // writeArgs are the defaults write arguments that store v with its type.
@@ -127,9 +148,12 @@ func (p Provider) Plan(ctx context.Context, t config.Target) ([]plan.Action, err
 		case provider.Differs:
 			op, detail = plan.OpUpdate, fmt.Sprintf("%s to %v", k.have, k.want)
 		}
-		args := writeArgs(k.domain, k.name, k.want)
+		tool, args := "defaults", writeArgs(k.domain, k.name, k.want)
+		if k.gnome {
+			tool, args = "gsettings", []string{"set", k.domain, k.name, gvariant(k.want)}
+		}
 		actions = append(actions, plan.Action{Op: op, Target: t.Name, Resource: k.resource(), Detail: detail,
-			Do: func(ctx context.Context) error { return p.r.Run(ctx, "defaults", args...) }})
+			Do: func(ctx context.Context) error { return p.r.Run(ctx, tool, args...) }})
 		if proc, ok := restarts[k.domain]; ok {
 			restart[proc] = true
 		}
@@ -174,4 +198,13 @@ func (p Provider) Items(ctx context.Context, t config.Target) ([]provider.Item, 
 	return items, nil
 }
 
-func (Provider) Programs(config.Target) []string { return []string{"defaults", "killall"} }
+func (Provider) Programs(t config.Target) []string {
+	var progs []string
+	if len(t.Defaults) > 0 {
+		progs = append(progs, "defaults", "killall")
+	}
+	if len(t.Gsettings) > 0 {
+		progs = append(progs, "gsettings")
+	}
+	return progs
+}
