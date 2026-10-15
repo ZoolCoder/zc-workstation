@@ -21,7 +21,7 @@ const Version = 1
 
 // Providers lists the provider names a target may use. A new provider adds
 // its name here and its package under internal/provider.
-var Providers = []string{"localdir", "packages", "dotfiles", "tools", "desktop", "settings", "services"}
+var Providers = []string{"localdir", "packages", "dotfiles", "tools", "desktop", "settings", "services", "agents"}
 
 // Systems are the values of a target's os list, as Go names them.
 var Systems = []string{"darwin", "linux", "windows"}
@@ -48,8 +48,8 @@ type Target struct {
 	Provider string `yaml:"provider"`
 	// OS limits the target to these systems; empty means every system.
 	OS []string `yaml:"os"`
-	// File is the manifest: a Brewfile, a package list, a winget import file
-	// or a mise config.
+	// File is the manifest: a Brewfile, a package list, a winget import file,
+	// a mise config or an agents file.
 	File string `yaml:"file"`
 	// Manager is the package manager for File; empty picks this system's.
 	Manager string `yaml:"manager"`
@@ -257,7 +257,7 @@ func (t Target) validateFields(where string) []error {
 		if t.Mode != "" && t.Mode != "file" && t.Mode != "symlink" {
 			errs = append(errs, fmt.Errorf("%s: mode %q is not file or symlink", where, t.Mode))
 		}
-	case "tools":
+	case "tools", "agents":
 		need("file", t.File)
 	case "desktop":
 		if t.Wallpaper == "" && t.Screensaver == "" && t.Accent == "" {
@@ -308,7 +308,7 @@ func (t Target) validateFields(where string) []error {
 		unused("destination", t.Destination != "")
 		unused("mode", t.Mode != "")
 	}
-	if t.Provider != "packages" && t.Provider != "tools" {
+	if t.Provider != "packages" && t.Provider != "tools" && t.Provider != "agents" {
 		unused("file", t.File != "")
 	}
 	if t.Provider != "desktop" {
