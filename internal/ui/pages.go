@@ -2,6 +2,7 @@ package ui
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -42,6 +43,48 @@ type dashboardPage struct {
 	ForHere, InSync, Errors, Skipped int
 	InPlace, Missing, Declared       int
 	ProgramsMissing                  int
+	// Drift is what the last drift check saved; nil when none ran yet.
+	Drift  *drift
+	Recent []activityRow
+}
+
+// drift is the file the drift command saves, as far as the page shows it.
+type drift struct {
+	At      time.Time      `json:"at"`
+	Changes int            `json:"changes"`
+	Manual  int            `json:"manual"`
+	Targets map[string]int `json:"targets"`
+	Error   string         `json:"error"`
+}
+
+// recentLimit is how many activity entries the dashboard shows.
+const recentLimit = 6
+
+func (s *Server) lastDrift() *drift {
+	if s.deps.DriftPath == "" {
+		return nil
+	}
+	b, err := os.ReadFile(s.deps.DriftPath)
+	if err != nil {
+		return nil
+	}
+	var d drift
+	if json.Unmarshal(b, &d) != nil || d.At.IsZero() {
+		return nil
+	}
+	return &d
+}
+
+func (s *Server) recent(n int) ([]activityRow, error) {
+	if s.deps.Activity == nil {
+		return nil, nil
+	}
+	entries, err := s.deps.Activity.Recent(n)
+	rows := make([]activityRow, 0, len(entries))
+	for _, e := range entries {
+		rows = append(rows, activityRow{At: e.At, Kind: e.Kind, Target: e.Target, Detail: e.Detail, OK: e.OK})
+	}
+	return rows, err
 }
 
 // Coverage is the share of declared items in place, in whole percent.
@@ -53,7 +96,8 @@ func (p dashboardPage) Coverage() int {
 }
 
 func (s *Server) dashboard(w http.ResponseWriter, r *http.Request) {
-	p := dashboardPage{chrome: s.chrome(r, "dashboard"), System: system(), Bin: s.deps.Name}
+	p := dashboardPage{chrome: s.chrome(r, "dashboard"), System: system(), Bin: s.deps.Name, Drift: s.lastDrift()}
+	p.Recent, _ = s.recent(recentLimit)
 	cfg, err := s.config()
 	if err == nil {
 		var eng *engine.Engine
@@ -242,13 +286,7 @@ type activityRow struct {
 
 func (s *Server) activity(w http.ResponseWriter, r *http.Request) {
 	p := activityPage{chrome: s.chrome(r, "activity"), Limit: activityLimit}
-	if s.deps.Activity != nil {
-		entries, err := s.deps.Activity.Recent(activityLimit)
-		p.LogErr = err
-		for _, e := range entries {
-			p.Rows = append(p.Rows, activityRow{At: e.At, Kind: e.Kind, Target: e.Target, Detail: e.Detail, OK: e.OK})
-		}
-	}
+	p.Rows, p.LogErr = s.recent(activityLimit)
 	s.render(w, "activity.html", p)
 }
 

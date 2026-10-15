@@ -20,7 +20,7 @@
 {{else}}
 <section class="next ok" aria-label="{{$.T "Next step"}}">
   <span class="ic">{{icon "check"}}</span>
-  <div><div class="next-k">{{$.T "Next step"}}</div><h2>{{$.T "All clear"}}</h2><p>{{$.T "Everything declared for this system is in place."}}</p></div>
+  <div><div class="next-k">{{$.T "Next step"}}</div><h2>{{$.T "All clear"}}</h2><p>{{$.T "Everything declared for this system is in place. To update what is outdated, run"}} <code>{{$.Bin}} upgrade</code>.</p></div>
   <div></div>
 </section>
 {{end}}
@@ -46,6 +46,30 @@
     {{if .Programs}}<div class="tw"><table>
       <tbody>{{range .Programs}}<tr><td><code>{{.Name}}</code></td><td>{{if .Found}}<span class="chip on">{{$.T "on PATH"}}</span>{{else}}<span class="chip bad">{{$.T "missing"}}</span>{{end}}</td></tr>{{end}}</tbody>
     </table></div>{{else}}<p class="empty">{{$.T "no target here runs another program"}}</p>{{end}}
+  </section>
+</div>
+
+<div class="grid-2">
+  <section class="panel" id="drift">
+    <div class="panel-h"><h2>{{$.T "Drift watch"}}</h2>{{with .Drift}}<span class="n">{{.Changes}}</span>{{end}}</div>
+    {{with .Drift}}
+      {{if .Error}}<p class="callout bad"><span class="err">{{.Error}}</span></p>
+      {{else if .Changes}}<p><b class="warn">{{.Changes}} {{$.T "change(s)"}}</b> {{$.T "outstanding at the last check"}}{{with .Manual}}, {{.}} {{$.T "manual"}}{{end}}.</p>
+        <p>{{range $t, $n := .Targets}}<a class="chip warn" href="/targets/{{$t}}">{{$t}} {{$n}}</a> {{end}}</p>
+      {{else}}<p><span class="chip on">{{$.T "no drift"}}</span> {{$.T "everything matched the config at the last check"}}{{with .Manual}}, {{.}} {{$.T "manual"}}{{end}}.</p>{{end}}
+      <p class="muted">{{$.T "checked"}} <span class="when">{{stamp .At}}</span> · <code>{{$.Bin}} drift</code></p>
+    {{else}}<p class="empty">{{$.T "no drift check yet. Run"}} <code>{{$.Bin}} drift</code>{{$.T ", or load"}} <code>{{$.Bin}} drift -plist</code> {{$.T "as a launchd agent to check every morning"}}.</p>{{end}}
+  </section>
+  <section class="panel" id="recent">
+    <div class="panel-h"><h2>{{$.T "Recent activity"}}</h2><a class="act" href="/activity">{{$.T "all activity"}}</a></div>
+    {{if .Recent}}<div class="tw"><table>
+      <tbody>{{range .Recent}}<tr>
+        <td class="when">{{stamp .At}}</td>
+        <td>{{if .OK}}<span class="chip on plain">{{.Kind}}</span>{{else}}<span class="chip bad plain">{{.Kind}} <span aria-hidden="true">✕</span><span class="sr-only">{{$.T "failed"}}</span></span>{{end}}</td>
+        <td>{{if .Target}}<a class="name" href="/targets/{{.Target}}">{{.Target}}</a>{{end}}</td>
+        <td class="wrap muted">{{.Detail}}</td>
+      </tr>{{end}}</tbody>
+    </table></div>{{else}}<p class="empty">{{$.T "nothing recorded yet"}}</p>{{end}}
   </section>
 </div>
 {{end}}
