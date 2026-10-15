@@ -1,0 +1,50 @@
+// Generated from `zc-workstation help` by make docs-gen; do not edit.
+[source,text]
+----
+zc-workstation sets up this machine from a YAML file: packages, dotfiles
+(chezmoi) and runtimes (mise), on macOS, Linux and Windows.
+
+Usage:
+  zc-workstation plan     [flags]        show what would change (default)
+  zc-workstation apply    [flags] [file] make the changes; with a saved plan, exactly those
+  zc-workstation status   [flags]        what is in place right now, per target
+  zc-workstation list     [flags]        every package, dotfile and runtime, with versions
+  zc-workstation capture  -target t      write t's manifest from what this machine has
+  zc-workstation validate [flags]        check the config offline
+  zc-workstation doctor   [-json]        health: system, config, programs, targets
+  zc-workstation upgrade  [flags]        save what is outdated, then upgrade it
+  zc-workstation history  [-n 20] [-json] what was applied, newest first
+  zc-workstation drift    [-last] [-json] count what differs from the config, and save it;
+                                 -plist prints a launchd agent that runs it daily
+  zc-workstation add      -target t -why w [-section s] kind:name
+                                declare an item in t's manifest; plan and apply install it
+  zc-workstation mcp                     stdio MCP server for agents
+  zc-workstation remove   -target t kind:name
+                                uninstall an item and drop it from t's manifest; mas:ID for an undeclared app
+  zc-workstation ui       [-addr a]      the admin page, on loopback only
+  zc-workstation version
+
+Exit codes:
+  0  nothing to do, or the apply converged and was verified
+  1  something failed
+  2  with -exit-code: changes are outstanding
+  3  with -exit-code: nothing left but MANUAL items
+
+Flags:
+  -config string   config file, or "-" for standard input; default: $ZC_WORKSTATION_CONFIG,
+                   then ./zc-workstation.yaml, then ~/.config/zc-workstation/zc-workstation.yaml
+  -target value    limit to this target; repeat for several
+  -yes             skip the confirmation prompt for deletions
+  -exit-code       plan: exit 2 for changes, 3 for manual-only
+  -upgrade         plan and apply: also upgrade outdated packages and runtimes
+  -only value      plan and apply: only the change to this resource, such as
+                   brew:tmux; repeat for several
+  -json            plan, status and list: machine-readable
+  -out string      plan: save the plan, to apply exactly what you reviewed;
+                   capture: write the manifest to this file, not stdout
+  -force           capture: overwrite the -out file
+  -state list      list: only these states, comma-separated (missing,outdated,...)
+  -kind list       list: only these kinds, comma-separated (brew,cask,dotfile,...)
+  -adoc            list: the declared packages and runtimes, with why each is
+                   there, as an AsciiDoc page
+----

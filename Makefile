@@ -73,6 +73,9 @@ app-install: app
 evals: ## run the plugin eval suite (evals/), needs the claude CLI
 	claude plugin eval . --no-publish --threshold 0.8
 
+docs-gen: ## rewrite the generated command reference from the usage text
+	UPDATE_DOCS=1 go test ./cmd/zc-workstation -run TestCommandReferenceMatchesUsage
+
 docs:
 	[ -d node_modules ] || npm ci
 	npm run docs
