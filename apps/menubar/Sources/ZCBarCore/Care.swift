@@ -174,6 +174,9 @@ public struct CareScan: Codable, Sendable, Equatable {
     /// Optional: scans saved before My Clutter have none.
     public var duplicates: [DuplicateGroup]?
     public var oldDownloads: [LargeFile]?
+    public var diskImages: [LargeFile]?
+    public var dependencies: [LargeFile]?
+    public var models: [AIModel]?
 
     public init(scannedAt: Date, junk: [String: Int64], largeFiles: [LargeFile], apps: [InstalledApp], agents: [LaunchAgent]) {
         self.scannedAt = scannedAt

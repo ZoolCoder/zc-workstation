@@ -55,6 +55,7 @@ struct CareView: View {
                     case .smartCare: SmartCare(care: care)
                     case .cleanup: Cleanup(care: care)
                     case .clutter: Clutter(care: care)
+                    case .developer: Developer(care: care)
                     case .apps: Applications(care: care)
                     case .performance: Performance(care: care)
                     case .protection: Protection(care: care)
@@ -133,6 +134,7 @@ private struct Sidebar: View {
         case .smartCare: return nil
         case .cleanup: return care.junk > 0 ? Store.bytes(care.junk) : nil
         case .clutter: return care.clutter > 0 ? Store.bytes(care.clutter) : nil
+        case .developer: return care.developer > 0 ? Store.bytes(care.developer) : nil
         case .apps:
             let n = care.store.snapshot?.outdated.count ?? 0
             return n > 0 ? "\(n)" : nil
@@ -419,7 +421,7 @@ private struct ClutterCard: View {
     var body: some View {
         ResultCard(title: "My Clutter", symbol: "doc.on.doc.fill", colors: Tint.blue,
                    figure: care.clutter == 0 ? "All clear" : Store.bytes(care.clutter),
-                   detail: care.clutter == 0 ? "No large files, duplicates or old downloads" : detail,
+                   detail: care.clutter == 0 ? "No large files, duplicates, old downloads or installers" : detail,
                    working: care.scanningFiles,
                    link: ("Review Files", { care.module = .clutter }))
     }
@@ -427,7 +429,8 @@ private struct ClutterCard: View {
     private var detail: String {
         [care.largeFiles.isEmpty ? nil : "\(care.largeFiles.count) large",
          care.duplicates.isEmpty ? nil : "\(care.duplicates.count) duplicated",
-         care.oldDownloads.isEmpty ? nil : "\(care.oldDownloads.count) old downloads"]
+         care.oldDownloads.isEmpty ? nil : "\(care.oldDownloads.count) old downloads",
+         care.diskImages.isEmpty ? nil : "\(care.diskImages.count) installers"]
             .compactMap { $0 }.joined(separator: ", ")
     }
 }
@@ -513,7 +516,7 @@ private struct Cleanup: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     Section("System Junk") {
-                        ForEach(Junk.spots(home: NSHomeDirectory())) { spot in
+                        ForEach(Junk.spots(home: NSHomeDirectory()).filter { FileManager.default.fileExists(atPath: $0.path) }) { spot in
                             JunkRow(care: care, spot: spot)
                         }
                         Row(icon: SymbolTile(symbol: "trash.fill", colors: Tint.gray, size: 32),
@@ -610,8 +613,8 @@ private struct Clutter: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            Header(title: "My Clutter", subtitle: care.clutter > 0 ? "\(Store.bytes(care.clutter)) in large files, duplicates and old downloads"
-                                                        : "No large files, duplicates or old downloads",
+            Header(title: "My Clutter", subtitle: care.clutter > 0 ? "\(Store.bytes(care.clutter)) in large files, duplicates, old downloads and installers"
+                                                        : "No large files, duplicates, old downloads or installers",
                    busy: care.scanningFiles, action: ("Rescan", { Task { await care.scanFiles() } }))
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
@@ -640,6 +643,12 @@ private struct Clutter: View {
                             empty("Nothing in Downloads older than 30 days.")
                         }
                         ForEach(care.oldDownloads) { FileRow(care: care, file: $0, dateLabel: "added") }
+                    }
+                    Section("Installers") {
+                        if care.diskImages.isEmpty {
+                            empty("No disk images or packages in Downloads or on the Desktop.")
+                        }
+                        ForEach(care.diskImages) { FileRow(care: care, file: $0, dateLabel: "added") }
                     }
                 }
                 .padding(.horizontal, 28)
@@ -748,7 +757,7 @@ private struct Applications: View {
     @Bindable var care: Care
     @State private var filter = Filter.all
 
-    enum Filter: String, CaseIterable { case all = "All", undeclared = "Not in Brewfile", unused = "Unused" }
+    enum Filter: String, CaseIterable { case all = "All", undeclared = "Not in Brewfile", unused = "Unused", leftovers = "Leftovers" }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -760,7 +769,7 @@ private struct Applications: View {
                 }
                 .pickerStyle(.segmented)
                 .labelsHidden()
-                .frame(width: 340)
+                .frame(width: 440)
                 Spacer()
                 let outdated = care.store.snapshot?.outdated.count ?? 0
                 if outdated > 0 {
@@ -770,6 +779,9 @@ private struct Applications: View {
             }
             .padding(.horizontal, 28)
             .padding(.bottom, 12)
+            if filter == .leftovers {
+                LeftoverList(care: care)
+            } else {
             ScrollView {
                 Section(filter.rawValue) {
                     ForEach(shown) { app in
@@ -791,6 +803,7 @@ private struct Applications: View {
                 .padding(.horizontal, 28)
                 .padding(.bottom, 70)
             }
+            }
         }
     }
 
@@ -801,6 +814,7 @@ private struct Applications: View {
         case .all: care.apps
         case .undeclared: care.undeclared
         case .unused: care.unused
+        case .leftovers: [InstalledApp]()
         }
         return list.sorted { ($0.size ?? 0) > ($1.size ?? 0) }
     }
@@ -824,6 +838,160 @@ private struct Applications: View {
     }
 }
 
+/// What removed apps left in the Library, to pick and trash.
+private struct LeftoverList: View {
+    @Bindable var care: Care
+    @State private var picked: Set<String> = []
+
+    var body: some View {
+        ScrollView {
+            Section("Leftovers of Removed Apps") {
+                if let orphans = care.orphans {
+                    if orphans.isEmpty {
+                        Text("No app left files behind.").foregroundStyle(.secondary).padding(10)
+                    }
+                    ForEach(orphans) { o in
+                        HStack(spacing: 10) {
+                            Toggle("", isOn: Binding(get: { picked.contains(o.id) },
+                                                     set: { on in if on { picked.insert(o.id) } else { picked.remove(o.id) } }))
+                                .toggleStyle(.checkbox)
+                                .labelsHidden()
+                            Row(icon: SymbolTile(symbol: "folder.badge.questionmark", colors: Tint.gray, size: 32),
+                                title: o.bundleID,
+                                detail: o.paths.map { ($0 as NSString).abbreviatingWithTildeInPath }.joined(separator: " · "),
+                                value: Store.bytes(o.size)) {
+                                Button { NSWorkspace.shared.activateFileViewerSelecting(o.paths.map(URL.init(fileURLWithPath:))) } label: {
+                                    Image(systemName: "magnifyingglass")
+                                }
+                                .controlSize(.small)
+                                .help("Show in Finder")
+                            }
+                        }
+                        .padding(.leading, 8)
+                    }
+                    HStack {
+                        Text("Named for apps macOS no longer knows. Check before trashing: a command-line tool may still use its settings.")
+                            .font(.caption).foregroundStyle(.secondary)
+                        Spacer()
+                        Button("Move \(picked.count) to Trash") {
+                            Task {
+                                await care.trashOrphans(orphans.filter { picked.contains($0.id) })
+                                picked.formIntersection(care.orphans?.map(\.id) ?? [])
+                            }
+                        }
+                        .controlSize(.small)
+                        .disabled(picked.isEmpty || care.store.busy != nil)
+                    }
+                    .padding(10)
+                } else {
+                    HStack(spacing: 8) {
+                        ProgressView().controlSize(.small)
+                        Text("Looking through the Library…").foregroundStyle(.secondary)
+                    }
+                    .padding(10)
+                }
+            }
+            .padding(.horizontal, 28)
+            .padding(.bottom, 70)
+        }
+        .task { if care.orphans == nil { await care.loadOrphans() } }
+    }
+}
+
+// MARK: Developer
+
+private struct Developer: View {
+    @Bindable var care: Care
+    @State private var picked: Set<String> = []
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Header(title: "Developer", subtitle: subtitle, busy: care.scanningDeveloper,
+                   action: ("Rescan", { Task { await care.scanDeveloper() } }))
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
+                    Section("Dependencies of Idle Projects") {
+                        if care.dependencies.isEmpty {
+                            Text(care.scanningDeveloper ? "Looking through your projects…"
+                                 : "No project untouched for 90 days keeps its dependencies.")
+                                .foregroundStyle(.secondary).padding(10)
+                        }
+                        ForEach(care.dependencies) { dep in
+                            HStack(spacing: 10) {
+                                Toggle("", isOn: Binding(get: { picked.contains(dep.id) },
+                                                         set: { on in if on { picked.insert(dep.id) } else { picked.remove(dep.id) } }))
+                                    .toggleStyle(.checkbox)
+                                    .labelsHidden()
+                                Row(icon: SymbolTile(symbol: "shippingbox.fill", colors: Tint.orange, size: 32),
+                                    title: dep.url.deletingLastPathComponent().lastPathComponent + "/" + dep.name,
+                                    detail: (dep.url.deletingLastPathComponent().path as NSString).abbreviatingWithTildeInPath
+                                        + " · project changed " + days(dep.modified),
+                                    value: Store.bytes(dep.size)) {
+                                    Button { NSWorkspace.shared.activateFileViewerSelecting([dep.url]) } label: {
+                                        Image(systemName: "magnifyingglass")
+                                    }
+                                    .controlSize(.small)
+                                    .help("Show in Finder")
+                                }
+                            }
+                            .padding(.leading, 8)
+                        }
+                        if !care.dependencies.isEmpty {
+                            HStack {
+                                Text("node_modules, Python virtualenvs and Rust or Maven target folders; an install brings them back.")
+                                    .font(.caption).foregroundStyle(.secondary)
+                                Spacer()
+                                Button(picked.count == care.dependencies.count ? "Select None" : "Select All") {
+                                    picked = picked.count == care.dependencies.count ? [] : Set(care.dependencies.map(\.id))
+                                }
+                                .controlSize(.small)
+                                Button("Move \(picked.count) to Trash") {
+                                    Task {
+                                        await care.trashDependencies(care.dependencies.filter { picked.contains($0.id) })
+                                        picked.formIntersection(care.dependencies.map(\.id))
+                                    }
+                                }
+                                .controlSize(.small)
+                                .disabled(picked.isEmpty || care.store.busy != nil)
+                            }
+                            .padding(10)
+                        }
+                    }
+                    Section("Local AI Models") {
+                        if care.models.isEmpty {
+                            Text(care.scanningDeveloper ? "Looking for models…"
+                                 : "No Ollama, LM Studio or Hugging Face models on this Mac.")
+                                .foregroundStyle(.secondary).padding(10)
+                        }
+                        ForEach(care.models) { model in
+                            Row(icon: SymbolTile(symbol: "brain.fill", colors: Tint.pink, size: 32),
+                                title: model.name,
+                                detail: model.source.rawValue + " · downloaded " + days(model.modified),
+                                value: Store.bytes(model.size)) {
+                                Button { NSWorkspace.shared.activateFileViewerSelecting(model.paths) } label: {
+                                    Image(systemName: "magnifyingglass")
+                                }
+                                .controlSize(.small)
+                                .help("Show in Finder")
+                                Button("Trash") { Task { await care.trash(model) } }
+                                    .controlSize(.small)
+                                    .disabled(care.store.busy != nil)
+                            }
+                        }
+                    }
+                }
+                .padding(.horizontal, 28)
+                .padding(.bottom, 70)
+            }
+        }
+    }
+
+    private var subtitle: String {
+        care.developer > 0 ? "\(Store.bytes(care.developer)) in idle project dependencies and local AI models"
+            : "Idle project dependencies and local AI models"
+    }
+}
+
 // MARK: Performance
 
 private struct Performance: View {
@@ -836,6 +1004,16 @@ private struct Performance: View {
                    action: ("Rescan", { Task { await care.loadAgents() } }))
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
+                    Section("Maintenance") {
+                        ForEach(care.maintenance) { task in
+                            Row(icon: SymbolTile(symbol: task.symbol, colors: Tint.violet, size: 32),
+                                title: task.title, detail: task.detail, value: task.admin ? "Needs password" : "") {
+                                Button("Run") { Task { await care.run(task) } }
+                                    .controlSize(.small)
+                                    .disabled(care.store.busy != nil)
+                            }
+                        }
+                    }
                     Section("Launch Agents") {
                         ForEach(care.agents) { agent in
                             Row(icon: SymbolTile(symbol: "bolt.fill", colors: agent.enabled ? Tint.orange : Tint.gray, size: 32),
@@ -892,6 +1070,7 @@ private struct Performance: View {
                 .padding(.bottom, 70)
             }
         }
+        .onAppear { if care.maintenance.isEmpty { care.loadMaintenance() } }
         // ps every three seconds while the module shows.
         .task(id: order) {
             care.monitor.order = order

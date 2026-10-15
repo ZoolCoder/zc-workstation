@@ -278,3 +278,81 @@ private func write(_ url: URL, bytes: Int) throws {
     #expect(CaskIndex.target(items: [a, b, c, d]) == "apps")
     #expect(CaskIndex.target(items: [d]) == nil)
 }
+
+@Test func idleProjectDependenciesOnly() throws {
+    let root = try tempDir()
+    let old = Date.now.addingTimeInterval(-200 * 86400)
+    try write(root.appendingPathComponent("idle/node_modules/a/index.js"), bytes: 4096)
+    try write(root.appendingPathComponent("idle/package.json"), bytes: 10)
+    try write(root.appendingPathComponent("busy/node_modules/b/index.js"), bytes: 4096)
+    try write(root.appendingPathComponent("busy/package.json"), bytes: 10)
+    try write(root.appendingPathComponent("rusty/target/debug/x"), bytes: 4096)
+    try write(root.appendingPathComponent("rusty/Cargo.toml"), bytes: 10)
+    try write(root.appendingPathComponent("plain/target/x"), bytes: 4096)
+    try write(root.appendingPathComponent("plain/notes.txt"), bytes: 10)
+    for path in ["idle/package.json", "rusty/Cargo.toml", "plain/notes.txt"] {
+        try FileManager.default.setAttributes([.modificationDate: old], ofItemAtPath: root.appendingPathComponent(path).path)
+    }
+    let found = ProjectDependencies.find(roots: [root]).map { $0.url.pathComponents.suffix(2).joined(separator: "/") }
+    #expect(Set(found) == ["idle/node_modules", "rusty/target"])
+}
+
+@Test func ollamaModelsKeepSharedBlobs() throws {
+    let root = try tempDir()
+    func manifest(_ path: String, _ digests: [String]) throws {
+        let layers = digests.map { "{\"digest\":\"\($0)\",\"size\":100}" }.joined(separator: ",")
+        let url = root.appendingPathComponent("manifests/registry.ollama.ai/" + path)
+        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try Data("{\"layers\":[\(layers)]}".utf8).write(to: url)
+    }
+    try manifest("library/llama3/latest", ["sha256:aa", "sha256:shared"])
+    try manifest("someone/coder/7b", ["sha256:bb", "sha256:shared"])
+    let models = AIModels.ollama(root: root).sorted { $0.name < $1.name }
+    #expect(models.map(\.name) == ["llama3:latest", "someone/coder:7b"])
+    #expect(models[0].size == 200)
+    #expect(models[0].paths.map(\.lastPathComponent) == ["latest", "sha256-aa"])
+}
+
+@Test func huggingFaceFoldersNameModels() throws {
+    let hub = try tempDir()
+    try write(hub.appendingPathComponent("models--org--tiny-model/blobs/x"), bytes: 4096)
+    try write(hub.appendingPathComponent("datasets--org--set/blobs/x"), bytes: 4096)
+    #expect(AIModels.huggingFace(hub: hub).map(\.name) == ["org/tiny-model"])
+}
+
+@Test func diskImagesByExtension() throws {
+    let dir = try tempDir()
+    try write(dir.appendingPathComponent("App.dmg"), bytes: 4096)
+    try write(dir.appendingPathComponent("Tool.PKG"), bytes: 8192)
+    try write(dir.appendingPathComponent("notes.txt"), bytes: 4096)
+    #expect(DiskImages.files(in: [dir]).map(\.name) == ["Tool.PKG", "App.dmg"])
+}
+
+@Test func orphansSkipInstalledAppleAndHelpers() throws {
+    let home = try tempDir()
+    try write(home.appendingPathComponent("Library/Caches/com.gone.app/x"), bytes: 4096)
+    try write(home.appendingPathComponent("Library/Preferences/com.gone.app.plist"), bytes: 10)
+    try write(home.appendingPathComponent("Library/Caches/com.here.app.helper/x"), bytes: 10)
+    try write(home.appendingPathComponent("Library/Caches/com.apple.Safari/x"), bytes: 10)
+    try write(home.appendingPathComponent("Library/Caches/Firefox/x"), bytes: 10)
+    let orphans = Leftovers.orphans(home: home.path) { $0 == "com.here.app" }
+    #expect(orphans.map(\.bundleID) == ["com.gone.app"])
+    #expect(orphans[0].paths.count == 2)
+    #expect(Leftovers.bundleID("Some.Thing.app") == nil)
+    #expect(Leftovers.bundleID("org.x.y.savedState") == "org.x.y")
+}
+
+@Test func maintenanceQuotesAdminSteps() {
+    let script = Maintenance.adminScript([["/usr/bin/killall", "-HUP", "it's"], ["/bin/echo", "a \"b\""]])
+    #expect(script == #"do shell script "'/usr/bin/killall' '-HUP' 'it'\\''s' && '/bin/echo' 'a \"b\"'" with administrator privileges"#)
+    #expect(Maintenance.tasks(brew: nil, docker: nil, xcode: false).allSatisfy { $0.id != "brew" && $0.id != "docker" })
+    #expect(Maintenance.tasks(brew: "/b", docker: "/d", xcode: true).contains { $0.id == "docker" })
+}
+
+@Test func devCachesStayOutOfAppCaches() {
+    let spots = Junk.spots(home: "/h")
+    let caches = spots.first { $0.id == "caches" }!
+    for spot in spots where spot.path.hasPrefix("/h/Library/Caches/") {
+        #expect(caches.keep.contains((spot.path as NSString).lastPathComponent))
+    }
+}

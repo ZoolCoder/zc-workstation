@@ -7,8 +7,8 @@ import ZCBarCore
 @MainActor @Observable
 final class Care {
     enum Module: String, CaseIterable, Identifiable {
-        case smartCare = "Smart Care", cleanup = "Cleanup", clutter = "My Clutter", apps = "Applications"
-        case performance = "Performance", protection = "Protection", spaceLens = "Space Lens"
+        case smartCare = "Smart Care", cleanup = "Cleanup", clutter = "My Clutter", developer = "Developer"
+        case apps = "Applications", performance = "Performance", protection = "Protection", spaceLens = "Space Lens"
 
         var id: String { rawValue }
         var symbol: String {
@@ -16,6 +16,7 @@ final class Care {
             case .smartCare: "sparkles"
             case .cleanup: "trash.fill"
             case .clutter: "doc.on.doc.fill"
+            case .developer: "hammer.fill"
             case .apps: "square.grid.2x2.fill"
             case .performance: "gauge.with.dots.needle.67percent"
             case .protection: "lock.shield.fill"
@@ -31,6 +32,15 @@ final class Care {
     var largeFiles: [LargeFile] = []
     var duplicates: [DuplicateGroup] = []
     var oldDownloads: [LargeFile] = []
+    var diskImages: [LargeFile] = []
+    /// node_modules and the like in projects left alone for 90 days.
+    var dependencies: [LargeFile] = []
+    var models: [AIModel] = []
+    var scanningDeveloper = false
+    /// Nil until looked for: what removed apps left in the Library.
+    var orphans: [Orphan]?
+    var loadingOrphans = false
+    var maintenance: [MaintenanceTask] = []
     var scanningFiles = false
     /// Each app bundle's cask, from Homebrew's index: what an app installed
     /// by hand can be adopted as.
@@ -65,9 +75,9 @@ final class Care {
 
     var monitor: Monitor { store.monitor }
     var junk: Int64 { monitor.junk.values.reduce(0, +) }
-    /// Large files and old downloads, each once, and what duplicates waste.
+    /// Large files, old downloads and installers, each once, and what duplicates waste.
     var clutter: Int64 {
-        let files = Dictionary((largeFiles + oldDownloads).map { ($0.id, $0.size) }, uniquingKeysWith: { a, _ in a })
+        let files = Dictionary((largeFiles + oldDownloads + diskImages).map { ($0.id, $0.size) }, uniquingKeysWith: { a, _ in a })
         return files.values.reduce(0, +) + duplicates.reduce(0) { $0 + $1.wasted }
     }
     var adoptable: [InstalledApp] {
@@ -76,6 +86,7 @@ final class Care {
     var untrusted: [InstalledApp] { apps.filter { assessments[$0.id].map { !$0.trusted } ?? false } }
     var undeclared: [InstalledApp] { apps.filter { $0.declared == nil } }
     var unused: [InstalledApp] { apps.filter { $0.unused() } }
+    var developer: Int64 { dependencies.reduce(0) { $0 + $1.size } + models.reduce(0) { $0 + $1.size } }
     var startup: [LaunchAgent] { agents.filter { $0.enabled && ($0.runAtLoad || $0.keepAlive) } }
 
     // MARK: Scan
@@ -90,7 +101,8 @@ final class Care {
         async let files: Void = scanFiles()
         async let apps: Void = loadApps()
         async let agents: Void = loadAgents()
-        _ = await (junk, state, files, apps, agents)
+        async let developer: Void = scanDeveloper()
+        _ = await (junk, state, files, apps, agents, developer)
         scannedAt = .now
         fresh = true
         save()
@@ -109,6 +121,9 @@ final class Care {
         largeFiles = last.largeFiles
         duplicates = last.duplicates ?? []
         oldDownloads = last.oldDownloads ?? []
+        diskImages = last.diskImages ?? []
+        dependencies = last.dependencies ?? []
+        models = last.models ?? []
         apps = last.apps
         agents = last.agents
         for app in apps { icons[app.id] = NSWorkspace.shared.icon(forFile: app.url.path) }
@@ -121,6 +136,9 @@ final class Care {
         var scan = CareScan(scannedAt: scannedAt, junk: monitor.junk, largeFiles: largeFiles, apps: apps, agents: agents)
         scan.duplicates = duplicates
         scan.oldDownloads = oldDownloads
+        scan.diskImages = diskImages
+        scan.dependencies = dependencies
+        scan.models = models
         try? scan.save(to: Self.saved)
     }
 
@@ -167,10 +185,12 @@ final class Care {
         guard let r = try? await ProcessRunner().run("/usr/bin/mdfind", args, env: [:]) else { return }
         let paths = r.output.split(whereSeparator: \.isNewline).map(String.init)
         let downloads = URL(fileURLWithPath: home + "/Downloads")
+        let installers = [downloads, URL(fileURLWithPath: home + "/Desktop")]
         async let large = Task.detached { LargeFiles.files(paths: paths, home: home, minimum: Self.largeFile) }.value
         async let same = Task.detached(priority: .utility) { Duplicates.groups(paths: paths, home: home, minimum: Self.duplicateFile) }.value
         async let old = Task.detached { OldDownloads.files(in: downloads) }.value
-        (largeFiles, duplicates, oldDownloads) = await (large, same, old)
+        async let images = Task.detached { DiskImages.files(in: installers) }.value
+        (largeFiles, duplicates, oldDownloads, diskImages) = await (large, same, old, images)
     }
 
     func trash(_ file: LargeFile) {
@@ -181,6 +201,8 @@ final class Care {
             try FileManager.default.trashItem(at: file.url, resultingItemURL: nil)
             largeFiles.removeAll { $0.id == file.id }
             oldDownloads.removeAll { $0.id == file.id }
+            diskImages.removeAll { $0.id == file.id }
+            dependencies.removeAll { $0.id == file.id }
             duplicates = duplicates.compactMap { group in
                 var group = group
                 group.files.removeAll { $0.id == file.id }
@@ -191,6 +213,55 @@ final class Care {
         } catch {
             store.message = Store.Message(text: error.localizedDescription, failed: true)
         }
+    }
+
+    // MARK: Developer
+
+    /// Stale project dependencies and local AI models: both walk folders,
+    /// so they run off the main actor.
+    func scanDeveloper() async {
+        scanningDeveloper = true
+        defer { scanningDeveloper = false }
+        let home = NSHomeDirectory()
+        async let stale = Task.detached(priority: .utility) {
+            ProjectDependencies.find(roots: ProjectDependencies.roots(home: home))
+        }.value
+        async let found = Task.detached(priority: .utility) { AIModels.find(home: home) }.value
+        (dependencies, models) = await (stale, found)
+    }
+
+    func trashDependencies(_ folders: [LargeFile]) async {
+        guard store.busy == nil, !folders.isEmpty else { return }
+        let total = folders.reduce(0) { $0 + $1.size }
+        let names = folders.prefix(8).map { ($0.url.path as NSString).abbreviatingWithTildeInPath }.joined(separator: "\n")
+        guard Alerts.confirm("Move \(folders.count) dependency folders to the Trash?",
+                             "\(Store.bytes(total)). The next install in each project brings them back.\n\n" + names
+                                 + (folders.count > 8 ? "\nand \(folders.count - 8) more" : ""),
+                             button: "Move to Trash") else { return }
+        store.busy = "Moving dependencies to the Trash"
+        defer { store.busy = nil }
+        let failure = await recycle(folders.map(\.url))
+        let gone = Set(folders.map(\.id))
+        dependencies.removeAll { gone.contains($0.id) && !FileManager.default.fileExists(atPath: $0.url.path) }
+        store.message = failure.map { Store.Message(text: $0, failed: true) }
+            ?? Store.Message(text: "\(Store.bytes(total)) of dependencies are in the Trash.", failed: false)
+        monitor.readDisk()
+    }
+
+    func trash(_ model: AIModel) async {
+        guard store.busy == nil, Alerts.confirm("Move \(model.name) to the Trash?",
+                                                "\(Store.bytes(model.size)) of \(model.source.rawValue) model files. "
+                                                    + "Pulling the model again downloads it.",
+                                                button: "Move to Trash") else { return }
+        store.busy = "Removing \(model.name)"
+        defer { store.busy = nil }
+        if let failure = await recycle(model.paths) {
+            store.message = Store.Message(text: "\(model.name): \(failure)", failed: true)
+        } else {
+            models.removeAll { $0.id == model.id }
+            store.message = Store.Message(text: "\(model.name) is in the Trash.", failed: false)
+        }
+        monitor.readDisk()
     }
 
     // MARK: Applications
@@ -280,6 +351,37 @@ final class Care {
             apps.removeAll { $0.id == app.id }
             store.message = Store.Message(text: "\(app.name) is uninstalled.", failed: false)
         }
+        monitor.readDisk()
+    }
+
+    // MARK: Leftovers
+
+    /// Library entries named for apps Launch Services no longer knows.
+    func loadOrphans() async {
+        guard !loadingOrphans else { return }
+        loadingOrphans = true
+        defer { loadingOrphans = false }
+        let home = NSHomeDirectory()
+        orphans = await Task.detached(priority: .utility) {
+            Leftovers.orphans(home: home) { NSWorkspace.shared.urlForApplication(withBundleIdentifier: $0) != nil }
+        }.value
+    }
+
+    func trashOrphans(_ picked: [Orphan]) async {
+        guard store.busy == nil, !picked.isEmpty else { return }
+        let total = picked.reduce(0) { $0 + $1.size }
+        let names = picked.prefix(10).map(\.bundleID).joined(separator: "\n")
+        guard Alerts.confirm("Move what \(picked.count) removed apps left to the Trash?",
+                             "\(Store.bytes(total)) in caches, settings and support files:\n\n" + names
+                                 + (picked.count > 10 ? "\nand \(picked.count - 10) more" : ""),
+                             button: "Move to Trash") else { return }
+        store.busy = "Removing leftovers"
+        defer { store.busy = nil }
+        let failure = await recycle(picked.flatMap { $0.paths.map(URL.init(fileURLWithPath:)) })
+        let gone = Set(picked.map(\.id))
+        orphans?.removeAll { o in gone.contains(o.id) && !o.paths.contains(where: FileManager.default.fileExists) }
+        store.message = failure.map { Store.Message(text: $0, failed: true) }
+            ?? Store.Message(text: "Leftovers of \(picked.count) apps are in the Trash.", failed: false)
         monitor.readDisk()
     }
 
@@ -393,6 +495,36 @@ final class Care {
             try? await Task.sleep(for: .seconds(1))
             readBackground()
         }
+    }
+
+    // MARK: Maintenance
+
+    func loadMaintenance() {
+        let xcode = FileManager.default.fileExists(atPath: "/Applications/Xcode.app")
+        maintenance = Maintenance.tasks(brew: store.program("brew"), docker: store.program("docker"), xcode: xcode)
+    }
+
+    /// Runs one task after asking; admin tasks go through osascript, which
+    /// asks for the password itself.
+    func run(_ task: MaintenanceTask) async {
+        guard store.busy == nil,
+              Alerts.confirm("\(task.title)?", task.detail + (task.admin ? "\n\nmacOS asks for your password." : ""),
+                             button: "Run") else { return }
+        store.busy = task.title
+        defer { store.busy = nil }
+        var failure: String?
+        if task.admin {
+            let r = try? await ProcessRunner().run("/usr/bin/osascript", ["-e", Maintenance.adminScript(task.steps)], env: [:])
+            if r?.status != 0 { failure = lastLine(r?.stderr) ?? "osascript failed" }
+        } else {
+            for step in task.steps {
+                let r = try? await ProcessRunner().run(step[0], Array(step.dropFirst()), env: store.loginEnv)
+                if r?.status != 0 { failure = lastLine(r?.stderr) ?? "\(step[0]) failed"; break }
+            }
+        }
+        store.message = failure.map { Store.Message(text: "\(task.title): \($0)", failed: true) }
+            ?? Store.Message(text: "\(task.title): done.", failed: false)
+        monitor.readDisk()
     }
 
     // MARK: Protection
