@@ -21,6 +21,10 @@ xcodebuild -project "$work/src/WebViewScreenSaver/WebViewScreenSaver.xcodeproj" 
   >"$work/build.log" 2>&1 || { grep ' error:' "$work/build.log" >&2; exit 1; }
 
 saver=$(find "$work/build.xcarchive" -name WebViewScreenSaver.saver -type d | head -1)
+# The v2.5 tag still says 2.4 in its Info.plist; stamp the tag so the run
+# script can tell this build is current, then re-sign the changed bundle.
+plutil -replace CFBundleShortVersionString -string "${tag#v}" "$saver/Contents/Info.plist"
+codesign --force --sign - "$saver"
 mkdir -p "$dest"
 rm -rf "$dest/WebViewScreenSaver.saver"
 cp -R "$saver" "$dest/"
