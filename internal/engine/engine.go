@@ -4,6 +4,7 @@ package engine
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"runtime"
@@ -126,15 +127,23 @@ func (e *Engine) each(f func(n int, t config.Target)) {
 	wg.Wait()
 }
 
-// Apply runs every executable action in order and stops at the first
-// failure. Then it re-plans: an action that reported success but left the
-// target still different is a failure too.
+// Apply runs every executable action in order. A failed action is reported
+// and the rest still run, so one broken package does not hold up the others.
+// Then it re-plans: an action that reported success but left the target
+// still different is a failure too.
 func (e *Engine) Apply(ctx context.Context, p plan.Plan, w io.Writer) error {
+	var failed []error
 	for _, a := range p.Executable() {
 		if err := a.Do(ctx); err != nil {
-			return fmt.Errorf("%s %s %s: %w", a.Op, a.Target, a.Resource, err)
+			err = fmt.Errorf("%s %s %s: %w", a.Op, a.Target, a.Resource, err)
+			fmt.Fprintf(w, "failed  %v\n", err)
+			failed = append(failed, err)
+			continue
 		}
 		fmt.Fprintf(w, "done  %s %s %s\n", a.Op, a.Target, a.Resource)
+	}
+	if len(failed) > 0 {
+		return fmt.Errorf("%d change(s) failed: %w", len(failed), errors.Join(failed...))
 	}
 	after, err := e.Plan(ctx)
 	if err != nil {

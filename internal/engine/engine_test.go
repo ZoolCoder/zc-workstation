@@ -3,6 +3,7 @@ package engine
 import (
 	"bytes"
 	"context"
+	"errors"
 	"strings"
 	"testing"
 
@@ -57,6 +58,22 @@ func TestApplyCatchesAWriteThatDidNothing(t *testing.T) {
 	p, _ := e.Plan(ctx)
 	if err := e.Apply(ctx, p, &bytes.Buffer{}); err == nil || !strings.Contains(err.Error(), "still outstanding") {
 		t.Fatalf("apply %v", err)
+	}
+}
+
+func TestApplyKeepsGoingPastAFailure(t *testing.T) {
+	ctx := context.Background()
+	e, _ := New(cfg(t.TempDir()), Default(), []string{"b"})
+	p, _ := e.Plan(ctx)
+	broken := plan.Action{Op: plan.OpCreate, Target: "b", Resource: "broken",
+		Do: func(context.Context) error { return errors.New("boom") }}
+	p.Actions = append([]plan.Action{broken}, p.Actions...)
+	var out bytes.Buffer
+	if err := e.Apply(ctx, p, &out); err == nil || !strings.Contains(err.Error(), "1 change(s) failed") {
+		t.Fatalf("apply %v", err)
+	}
+	if !strings.Contains(out.String(), "done  CREATE b") {
+		t.Fatalf("later action skipped: %q", out.String())
 	}
 }
 
