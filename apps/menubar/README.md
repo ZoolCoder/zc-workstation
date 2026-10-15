@@ -226,5 +226,5 @@ A change that deletes or trashes files must:
 `make app-install`. CI builds and tests the app on a macOS runner.
 
 More is in the manual's
-[Menu bar app and ZC Care](https://zoolcoder.github.io/zc-workstation/zc-workstation/app.html)
+[Menu bar app and ZC Care](https://zoolcoder.github.io/zc-workstation/app.html)
 page.

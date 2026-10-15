@@ -69,7 +69,7 @@ remove() {
       drop_lines .github/CODEOWNERS '^/hooks/'
       ;;
     docs)
-      rm -rf docs/antora.yml docs/modules docs/root.html antora-playbook.yml antora-assembler.yml \
+      rm -rf docs/antora.yml docs/modules docs/redirects.mjs antora-playbook.yml antora-assembler.yml \
         Gemfile Gemfile.lock package.json package-lock.json .github/workflows/docs.yml .webscan.json
       drop_target Makefile docs-serve
       drop_target Makefile docs
