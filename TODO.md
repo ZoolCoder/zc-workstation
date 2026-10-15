@@ -27,7 +27,6 @@ same work. Remove the line in the pull request that finishes it.
       browser, cleared only for a browser that is closed.
 - [ ] Sign ZCBar with a Developer ID and notarise it, so Full Disk Access
       survives an update and Gatekeeper opens it without a warning.
-- [ ] Ship ZCBar in the release: a cask for the app next to the CLI's.
 
 ## Linux (phase 2)
 

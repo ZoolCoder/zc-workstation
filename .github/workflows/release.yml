@@ -35,3 +35,40 @@ jobs:
       - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-checksums: dist/checksums.txt
+
+  zcbar:
+    # ZCBar, the menu bar app: a universal .app on the release, and a cask
+    # for it in a pull request into develop, as goreleaser does for the CLI.
+    needs: goreleaser
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+      - name: Build
+        run: |
+          version=${GITHUB_REF_NAME#v}
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+          UNIVERSAL=1 VERSION=$version apps/menubar/package.sh dist/ZCBar.app
+          ditto -c -k --keepParent dist/ZCBar.app "dist/ZCBar_${version}.zip"
+          apps/menubar/cask.sh "$version" "$(shasum -a 256 "dist/ZCBar_${version}.zip" | cut -d' ' -f1)" > "$RUNNER_TEMP/zcbar.rb"
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: dist/ZCBar_*.zip
+      - name: Upload and open the cask pull request
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "$GITHUB_REF_NAME" "dist/ZCBar_${VERSION}.zip"
+          branch="chore/zcbar-cask-${VERSION}"
+          git switch -c "$branch" origin/develop
+          mkdir -p Casks
+          cp "$RUNNER_TEMP/zcbar.rb" Casks/zcbar.rb
+          git config user.name goreleaser
+          git config user.email goreleaser@users.noreply.github.com
+          git add Casks/zcbar.rb
+          git commit -m "chore(brew): zcbar cask for ${GITHUB_REF_NAME}"
+          git push origin "$branch"
+          gh pr create --base develop --head "$branch" \
+            --title "chore(brew): zcbar cask for ${GITHUB_REF_NAME}" \
+            --body "The ZCBar cask for ${GITHUB_REF_NAME}, from the release workflow."

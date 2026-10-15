@@ -10,6 +10,22 @@ It lives in `apps/menubar`, a Swift package for macOS 14 and later.
 
 == Install
 
+From the Homebrew tap, with the CLI it needs:
+
+[source,console]
+----
+$ brew tap zoolcoder/zc-workstation https://github.com/zoolcoder/zc-workstation
+$ brew install --cask zcbar
+----
+
+Each release builds ZCBar for Apple silicon and Intel and signs it ad hoc,
+not yet with a Developer ID, so macOS blocks the first start: open it once
+from the Finder with Control-click, *Open*. `gh attestation verify
+ZCBar_<version>.zip --repo zoolcoder/zc-workstation` checks the zip was built
+by the release workflow.
+
+From a clone of the repository:
+
 [source,console]
 ----
 $ make app-install

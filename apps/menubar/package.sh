@@ -1,14 +1,19 @@
 #!/usr/bin/env bash
 # Builds ZCBar and wraps it in an ad-hoc signed .app: a menu bar app, with no
-# Dock icon. Usage: package.sh OUT.app; VERSION sets the bundle version.
+# Dock icon. Usage: package.sh OUT.app; VERSION sets the bundle version, and
+# UNIVERSAL=1 builds for both Apple silicon and Intel, as the release does.
 set -euo pipefail
 
 out=${1:?usage: package.sh OUT.app}
 version=${VERSION:-0.0.0-dev}
 here=$(cd "$(dirname "$0")" && pwd)
 
-swift build --package-path "$here" -c release
-bin=$(swift build --package-path "$here" -c release --show-bin-path)
+args=(--package-path "$here" -c release)
+if [[ ${UNIVERSAL:-} == 1 ]]; then
+  args+=(--arch arm64 --arch x86_64)
+fi
+swift build "${args[@]}"
+bin=$(swift build "${args[@]}" --show-bin-path)
 
 rm -rf "$out"
 mkdir -p "$out/Contents/MacOS" "$out/Contents/Resources"
