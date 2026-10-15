@@ -64,7 +64,7 @@ func (Provider) Measure(_ context.Context, t config.Target) (provider.Live, erro
 			m.InPlace++
 		}
 	}
-	m.Summary = fmt.Sprintf("%d of %d declared files in place, %d files on disk", m.InPlace, m.Declared, len(live))
+	m.Summary = fmt.Sprintf("%d of %d declared files in place, %d on disk", m.InPlace, m.Declared, len(live))
 	return m, nil
 }
 
