@@ -69,6 +69,13 @@ targets:
       com.apple.dock:
         autohide: true
 
+  # keyboard installs a keyd config on Linux: Caps Lock is Escape on tap and
+  # Hyper on hold. keyd itself comes from your packages.
+  - name: keys
+    provider: keyboard
+    os: [linux]
+    file: assets/keyd/default.conf
+
   # services keeps Homebrew services running and launchd agents loaded.
   - name: services
     provider: services

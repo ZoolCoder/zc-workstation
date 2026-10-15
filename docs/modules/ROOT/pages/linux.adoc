@@ -68,6 +68,10 @@ targets:
     gsettings:
       org.gnome.desktop.interface:
         color-scheme: prefer-dark
+  - name: keys
+    provider: keyboard
+    os: [linux]
+    file: keyd.conf
 ----
 
 `apt.txt` and `dnf.txt` hold one package per line, as the manager names
@@ -81,6 +85,8 @@ machine has.
   comes first.
 * *Settings* writes each key with `gsettings set`. GNOME applies it at once.
   A light theme is `color-scheme: prefer-light` with `gtk-theme: Adwaita`.
+* *Keyboard* installs a keyd config with sudo and enables keyd. Start from
+  `assets/keyd/default.conf`: Caps Lock is Escape on tap, Hyper on hold.
 
 xref:providers.adoc[Providers] has every key for each provider.
 

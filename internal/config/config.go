@@ -21,7 +21,7 @@ const Version = 1
 
 // Providers lists the provider names a target may use. A new provider adds
 // its name here and its package under internal/provider.
-var Providers = []string{"localdir", "packages", "dotfiles", "tools", "desktop", "settings", "services", "agents"}
+var Providers = []string{"localdir", "packages", "dotfiles", "tools", "desktop", "settings", "services", "agents", "keyboard"}
 
 // Systems are the values of a target's os list, as Go names them.
 var Systems = []string{"darwin", "linux", "windows"}
@@ -262,7 +262,7 @@ func (t Target) validateFields(where string) []error {
 		if t.Mode != "" && t.Mode != "file" && t.Mode != "symlink" {
 			errs = append(errs, fmt.Errorf("%s: mode %q is not file or symlink", where, t.Mode))
 		}
-	case "tools", "agents":
+	case "tools", "agents", "keyboard":
 		need("file", t.File)
 	case "desktop":
 		if t.Wallpaper == "" && t.Screensaver == "" && t.Accent == "" {
@@ -324,6 +324,9 @@ func (t Target) validateFields(where string) []error {
 	if t.Provider == "desktop" && !slices.Equal(t.OS, []string{"darwin"}) {
 		errs = append(errs, fmt.Errorf("%s: provider %s drives macOS only; set os: [darwin]", where, t.Provider))
 	}
+	if t.Provider == "keyboard" && !slices.Equal(t.OS, []string{"linux"}) {
+		errs = append(errs, fmt.Errorf("%s: provider keyboard drives keyd on Linux only; set os: [linux]", where))
+	}
 	if t.Provider != "localdir" {
 		unused("path", t.Path != "")
 		unused("files", len(t.Files) > 0)
@@ -340,7 +343,7 @@ func (t Target) validateFields(where string) []error {
 		unused("destination", t.Destination != "")
 		unused("mode", t.Mode != "")
 	}
-	if t.Provider != "packages" && t.Provider != "tools" && t.Provider != "agents" {
+	if !slices.Contains([]string{"packages", "tools", "agents", "keyboard"}, t.Provider) {
 		unused("file", t.File != "")
 	}
 	if t.Provider != "desktop" {

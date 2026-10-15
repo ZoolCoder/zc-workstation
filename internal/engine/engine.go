@@ -18,6 +18,7 @@ import (
 	"github.com/zoolcoder/zc-workstation/internal/provider/agents"
 	"github.com/zoolcoder/zc-workstation/internal/provider/desktop"
 	"github.com/zoolcoder/zc-workstation/internal/provider/dotfiles"
+	"github.com/zoolcoder/zc-workstation/internal/provider/keyboard"
 	"github.com/zoolcoder/zc-workstation/internal/provider/localdir"
 	"github.com/zoolcoder/zc-workstation/internal/provider/packages"
 	"github.com/zoolcoder/zc-workstation/internal/provider/services"
@@ -46,6 +47,7 @@ func With(r sh.Runner) Providers {
 		"settings": settings.New(r),
 		"services": services.New(r),
 		"agents":   agents.New(r),
+		"keyboard": keyboard.New(r),
 	}
 }
 

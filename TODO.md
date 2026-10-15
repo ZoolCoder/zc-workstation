@@ -24,10 +24,6 @@ same work. Remove the line in the pull request that finishes it.
 - [ ] Sign ZCBar with a Developer ID and notarise it, so Full Disk Access
       survives an update and Gatekeeper opens it without a warning.
 
-## Linux (phase 2)
-
-- [ ] keyd for Caps Lock as Escape and Hyper.
-
 ## Windows (phase 3)
 
 - [ ] `settings` through the registry, `services` through Task Scheduler.
