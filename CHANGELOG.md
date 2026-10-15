@@ -95,6 +95,8 @@ here with what to edit.
 
 ### Setup and look
 
+- The docs have a page for each system: a new Mac, a Linux machine and a
+  Windows machine.
 - `bootstrap.sh` sets up a new Mac from a config repo in one command.
 - The ZoolCoder theme for the shell, bar and tools, a wallpaper and a screen
   saver.

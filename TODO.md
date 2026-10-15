@@ -36,7 +36,6 @@ same work. Remove the line in the pull request that finishes it.
 
 ## Docs
 
-- [ ] Getting started pages per system: macOS, Linux, Windows.
 - [ ] *Good first change:* a toolbox page for a tool in the Brewfile that has
       none yet, under `docs/modules/ROOT/pages/toolbox/`.
 - [ ] *Good first change:* a screenshot of the dashboard for `ui.adoc`, with
