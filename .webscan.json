@@ -2,14 +2,14 @@
   "name": "zc-workstation",
   "urls": {
     "prod": "https://zoolcoder.github.io/zc-workstation",
-    "local": "http://127.0.0.1:8643/zc-workstation"
+    "local": "http://127.0.0.1:8643"
   },
   "pages": [
-    "/zc-workstation/",
-    "/zc-workstation/getting-started.html",
-    "/zc-workstation/commands.html",
-    "/zc-workstation/ui.html",
-    "/zc-workstation/agents.html"
+    "/",
+    "/getting-started.html",
+    "/commands.html",
+    "/ui.html",
+    "/agents.html"
   ],
   "dist": "build/site",
   "admin": "",

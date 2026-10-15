@@ -234,7 +234,7 @@ The script:
 7. Plans and applies until nothing is left.
 
 It is safe to run again. The manual's
-[A new Mac in one command](https://zoolcoder.github.io/zc-workstation/zc-workstation/new-machine.html)
+[A new Mac in one command](https://zoolcoder.github.io/zc-workstation/new-machine.html)
 page shows a config repo layout that works well.
 
 ## The config
@@ -298,7 +298,7 @@ The config is found in this order:
 3. `./zc-workstation.yaml`
 4. `~/.config/zc-workstation/zc-workstation.yaml`
 
-Every key is in [Writing a config](https://zoolcoder.github.io/zc-workstation/zc-workstation/configuration.html).
+Every key is in [Writing a config](https://zoolcoder.github.io/zc-workstation/configuration.html).
 
 A comment after a Brewfile line is the item's *why*. `list` and the
 dashboard show it, so the manifest also records why each tool is there:
@@ -337,7 +337,7 @@ Useful flags:
 | `-exit-code` | Makes the exit code report outstanding changes. |
 | `-json` | Gives machine-readable output. |
 
-The full reference is in [Commands](https://zoolcoder.github.io/zc-workstation/zc-workstation/commands.html).
+The full reference is in [Commands](https://zoolcoder.github.io/zc-workstation/commands.html).
 
 ## Everyday workflows
 
@@ -441,7 +441,7 @@ $ make app-install    # builds and installs ~/Applications/ZCBar.app (macOS 14+)
 ```
 
 More is in [apps/menubar/README.md](apps/menubar/README.md) and the manual's
-[Menu bar app and ZC Care](https://zoolcoder.github.io/zc-workstation/zc-workstation/app.html) page.
+[Menu bar app and ZC Care](https://zoolcoder.github.io/zc-workstation/app.html) page.
 
 ## The toolbox
 
@@ -451,7 +451,7 @@ and the keys worth knowing. Take what you like into your own Brewfile.
 
 | Area | Tools |
 |---|---|
-| Terminal and shell | [Ghostty](https://zoolcoder.github.io/zc-workstation/zc-workstation/toolbox/ghostty.html), [tmux](https://zoolcoder.github.io/zc-workstation/zc-workstation/toolbox/tmux.html) with a `dev` layout, zsh with antidote, Starship, Atuin |
+| Terminal and shell | [Ghostty](https://zoolcoder.github.io/zc-workstation/toolbox/ghostty.html), [tmux](https://zoolcoder.github.io/zc-workstation/toolbox/tmux.html) with a `dev` layout, zsh with antidote, Starship, Atuin |
 | Command line | fzf, zoxide, eza, bat, fd, ripgrep, Yazi |
 | Git | lazygit, delta, difftastic, git-absorb, gitleaks before every commit, gh |
 | Runtimes and dotfiles | mise, chezmoi, direnv |
@@ -461,7 +461,7 @@ and the keys worth knowing. Take what you like into your own Brewfile.
 | AI | Claude Code in a Ghostty split or a tmux pane, Codex, CodexBar, Ollama |
 
 The colours, prompt, terminal and bar themes are in [`assets/theme`](assets/theme).
-Start at [The toolbox](https://zoolcoder.github.io/zc-workstation/zc-workstation/toolbox/index.html).
+Start at [The toolbox](https://zoolcoder.github.io/zc-workstation/toolbox/index.html).
 
 ## AI agents
 
@@ -490,7 +490,7 @@ $ claude plugin install zc-workstation
 
 There are also adapters for **Codex, Gemini, Copilot and Cursor** in
 [`adapters/`](adapters). The manual's
-[Agents and MCP](https://zoolcoder.github.io/zc-workstation/zc-workstation/agents.html)
+[Agents and MCP](https://zoolcoder.github.io/zc-workstation/agents.html)
 page covers the setup.
 
 ## Safety
@@ -511,7 +511,7 @@ page covers the setup.
   so neither a symlink nor `..` can escape.
 - **No telemetry, no account, no cloud service.**
 
-The [threat model](https://zoolcoder.github.io/zc-workstation/zc-workstation/security.html)
+The [threat model](https://zoolcoder.github.io/zc-workstation/security.html)
 says what it protects against and what it does not.
 
 ## How it compares
@@ -574,7 +574,7 @@ pull request against it.
 - [CONTRIBUTING.md](CONTRIBUTING.md): set up, branches, commits, what a good
   change looks like.
 - [TODO.md](TODO.md): open work, with *good first change* items.
-- [Adding a provider](https://zoolcoder.github.io/zc-workstation/zc-workstation/extending.html).
+- [Adding a provider](https://zoolcoder.github.io/zc-workstation/extending.html).
 - [GOVERNANCE.md](GOVERNANCE.md): who decides, and how releases work.
 
 Questions go to [SUPPORT.md](SUPPORT.md). Security reports go to
