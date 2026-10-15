@@ -98,6 +98,21 @@ public struct Workstation: Sendable {
         return report.checks
     }
 
+    /// The last saved drift. It never fails the snapshot: no check has run
+    /// until the launchd agent is loaded.
+    public func drift() async -> Drift? {
+        guard let r = try? await run(["drift", "-last", "-json"]), r.status == 0 else { return nil }
+        let dec = JSONDecoder()
+        dec.dateDecodingStrategy = .custom { d in
+            let s = try d.singleValueContainer().decode(String.self)
+            let f = ISO8601DateFormatter()
+            f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            if let date = f.date(from: s) ?? ISO8601DateFormatter().date(from: s) { return date }
+            throw DecodingError.dataCorrupted(.init(codingPath: d.codingPath, debugDescription: s))
+        }
+        return try? dec.decode(Drift.self, from: r.stdout)
+    }
+
     public func outdated() async throws -> [Item] { try await items(states: ["outdated"]) }
 
     /// What targets declare, each item knowing its target; no targets is all.
@@ -133,6 +148,7 @@ public struct Workstation: Sendable {
         async let t = await Result(catching: { try await status() })
         async let o = await Result(catching: { try await outdated() })
         async let f = await Result(catching: { try await checks() })
+        async let d = await drift()
         var s = Snapshot()
         var errors: [String] = []
         switch await t {
@@ -155,6 +171,7 @@ public struct Workstation: Sendable {
                 errors.append("services: " + error.localizedDescription)
             }
         }
+        s.drift = await d
         s.errors = errors
         return s
     }

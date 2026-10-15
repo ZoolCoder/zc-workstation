@@ -11,6 +11,8 @@ public struct Snapshot: Sendable, Equatable {
     public var findings: [Check]
     /// Every security check, passing or not: the Mac tab's protection.
     public var security: [Check] = []
+    /// The last daily drift check; nil before the first one.
+    public var drift: Drift?
     /// A part that could not be read, so the rest still shows.
     public var errors: [String]
 
