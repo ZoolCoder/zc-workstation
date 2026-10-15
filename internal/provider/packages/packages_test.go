@@ -38,10 +38,11 @@ func brewMachine() *sh.Fake {
 	return &sh.Fake{
 		Programs: []string{"brew", "mas"},
 		Out: map[string]string{
-			"brew list --formula -1 --full-name": "git\nfelixkratz/formulae/sketchybar\n",
-			"brew list --cask -1 --full-name":    "",
-			"brew tap":                           "FelixKratz/formulae\n",
-			"mas list":                           "1352778147  Bitwarden  (2026.9.1)\n",
+			"brew list --formula -1":          "git\nsketchybar\n",
+			"brew list --cask -1":             "",
+			"brew list --cask -1 --full-name": "",
+			"brew tap":                        "FelixKratz/formulae\n",
+			"mas list":                        "1352778147  Bitwarden  (2026.9.1)\n",
 		},
 	}
 }
@@ -264,7 +265,7 @@ func TestUpgradeIsOptIn(t *testing.T) {
 	r.Out["brew outdated --json=v2"] = outdatedJSON
 	r.Out["mas outdated"] = ""
 	tg := writeManifest(t, "Brewfile", `brew "git"`+"\n"+`brew "tmux"`)
-	r.Out["brew list --formula -1 --full-name"] += "tmux\n"
+	r.Out["brew list --formula -1"] += "tmux\n"
 	if actions, _ := New(r, "darwin").Plan(context.Background(), tg); len(actions) != 0 {
 		t.Fatalf("plan without upgrade %v", resources(actions))
 	}

@@ -86,22 +86,44 @@ func (e *Engine) provider(t config.Target) (provider.Provider, error) {
 // Plan reads live state for every selected target that applies to this
 // system.
 func (e *Engine) Plan(ctx context.Context) (plan.Plan, error) {
-	var p plan.Plan
-	for _, t := range e.targets {
+	type result struct {
+		actions []plan.Action
+		err     error
+	}
+	results := make([]result, len(e.targets))
+	e.each(func(n int, t config.Target) {
 		if !t.ForOS(GOOS) {
-			continue
+			return
 		}
 		prov, err := e.provider(t)
 		if err != nil {
-			return plan.Plan{}, err
+			results[n].err = err
+			return
 		}
 		actions, err := prov.Plan(ctx, t)
 		if err != nil {
-			return plan.Plan{}, fmt.Errorf("plan %s: %w", t.Name, err)
+			err = fmt.Errorf("plan %s: %w", t.Name, err)
 		}
-		p.Add(actions...)
+		results[n] = result{actions, err}
+	})
+	var p plan.Plan
+	for _, r := range results {
+		if r.err != nil {
+			return plan.Plan{}, r.err
+		}
+		p.Add(r.actions...)
 	}
 	return p, nil
+}
+
+// each calls f for every selected target side by side, since targets read
+// different programs and files. Results stay in config order through n.
+func (e *Engine) each(f func(n int, t config.Target)) {
+	var wg sync.WaitGroup
+	for n, t := range e.targets {
+		wg.Go(func() { f(n, t) })
+	}
+	wg.Wait()
 }
 
 // Apply runs every executable action in order and stops at the first
@@ -145,14 +167,14 @@ func (s TargetStatus) InSync() bool {
 // Status summarises every selected target. A target that cannot be read is
 // reported in its row rather than failing the others.
 func (e *Engine) Status(ctx context.Context) []TargetStatus {
-	out := make([]TargetStatus, 0, len(e.targets))
-	for _, t := range e.targets {
+	out := make([]TargetStatus, len(e.targets))
+	e.each(func(n int, t config.Target) {
 		row := TargetStatus{Target: t.Name, Provider: t.Provider}
+		defer func() { out[n] = row }()
 		if !t.ForOS(GOOS) {
 			row.Skipped = true
 			row.Summary = "not for " + GOOS + ", only " + strings.Join(t.OS, ", ")
-			out = append(out, row)
-			continue
+			return
 		}
 		prov, err := e.provider(t)
 		if err == nil {
@@ -167,8 +189,7 @@ func (e *Engine) Status(ctx context.Context) []TargetStatus {
 		if err != nil {
 			row.Error = err.Error()
 		}
-		out = append(out, row)
-	}
+	})
 	return out
 }
 
@@ -213,13 +234,8 @@ type TargetItems struct {
 // Items lists every selected target's items. Like Status, a target that
 // cannot be read reports it in its row.
 func (e *Engine) Items(ctx context.Context) []TargetItems {
-	// Targets read different programs, so they are read side by side.
 	out := make([]TargetItems, len(e.targets))
-	var wg sync.WaitGroup
-	for n, t := range e.targets {
-		wg.Go(func() { out[n] = e.items(ctx, t) })
-	}
-	wg.Wait()
+	e.each(func(n int, t config.Target) { out[n] = e.items(ctx, t) })
 	return dropDeclaredExtras(out)
 }
 

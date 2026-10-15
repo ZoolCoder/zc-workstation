@@ -185,9 +185,11 @@ func brewInstalled(ctx context.Context, r sh.Runner, items []item) (map[string]s
 		errs []error
 		wg   sync.WaitGroup
 	)
+	// Without --full-name brew answers from its shell fast path, not Ruby;
+	// set.has matches a tapped package by its short name.
 	for kind, args := range map[string][]string{
-		"brew": {"list", "--formula", "-1", "--full-name"},
-		"cask": {"list", "--cask", "-1", "--full-name"},
+		"brew": {"list", "--formula", "-1"},
+		"cask": {"list", "--cask", "-1"},
 		"tap":  {"tap"},
 	} {
 		wg.Go(func() {

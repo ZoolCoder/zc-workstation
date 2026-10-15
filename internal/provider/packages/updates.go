@@ -3,9 +3,11 @@ package packages
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"regexp"
 	"strings"
+	"sync"
 
 	"github.com/zoolcoder/zc-workstation/internal/sh"
 )
@@ -34,20 +36,28 @@ func lookup[V any](m map[string]V, i item) (V, bool) {
 // Homebrew's own, formulae installed on request that nothing depends on,
 // casks, and App Store apps.
 func brewChosen(ctx context.Context, r sh.Runner) ([]item, error) {
-	var out []item
-	for _, q := range []struct {
+	queries := []struct {
 		kind string
 		args []string
 	}{
 		{"tap", []string{"tap"}},
 		{"brew", []string{"leaves", "--installed-on-request"}},
 		{"cask", []string{"list", "--cask", "-1", "--full-name"}},
-	} {
-		b, err := r.Output(ctx, "brew", q.args...)
-		if err != nil {
-			return nil, err
-		}
-		for _, name := range lines(b) {
+	}
+	// Each query starts Ruby, so they run side by side.
+	results := make([][]byte, len(queries))
+	errs := make([]error, len(queries))
+	var wg sync.WaitGroup
+	for n, q := range queries {
+		wg.Go(func() { results[n], errs[n] = r.Output(ctx, "brew", q.args...) })
+	}
+	wg.Wait()
+	if err := errors.Join(errs...); err != nil {
+		return nil, err
+	}
+	var out []item
+	for n, q := range queries {
+		for _, name := range lines(results[n]) {
 			if name == "" || q.kind == "tap" && strings.HasPrefix(name, "homebrew/") {
 				continue
 			}

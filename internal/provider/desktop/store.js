@@ -38,6 +38,25 @@ function run(argv) {
       if (k.js === 'Desktop' && v.isKindOfClass($.NSDictionary)) desktop(v); else walk(v)
     }
   }
+  // Reading walks one unwrapped copy: going through the bridge per key is
+  // about a hundred times slower.
+  const read = o => {
+    if (Array.isArray(o)) return o.forEach(read)
+    if (!o || typeof o !== 'object' || o.constructor !== Object) return
+    for (const [k, v] of Object.entries(o)) {
+      if (k !== 'Desktop' || !v || typeof v !== 'object') { read(v); continue }
+      for (const c of v.Content?.Choices ?? []) {
+        seen++
+        if (c.Provider !== image || !c.Configuration) continue
+        const d = $.NSPropertyListSerialization.propertyListWithDataOptionsFormatError(c.Configuration, 0, null, null)
+        if (!d.isNil() && ObjC.deepUnwrap(d).url?.relative === url) match++
+      }
+    }
+  }
+  if (mode === 'read') {
+    read(ObjC.deepUnwrap(root))
+    return match + ' ' + seen
+  }
   walk(root)
   if (mode === 'write' && match < seen)
     $.NSPropertyListSerialization.dataWithPropertyListFormatOptionsError(root, 200, 0, null).writeToFileAtomically(store, true)
