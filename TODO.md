@@ -27,7 +27,6 @@ same work. Remove the line in the pull request that finishes it.
 ## Linux (phase 2)
 
 - [ ] keyd for Caps Lock as Escape and Hyper.
-- [ ] `apply` then `doctor` in Ubuntu LTS and Fedora containers in CI.
 
 ## Windows (phase 3)
 

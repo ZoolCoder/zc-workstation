@@ -30,6 +30,8 @@ here with what to edit.
 
 ### Hardening
 
+- CI applies a config in fresh Ubuntu 24.04 and Fedora 42 containers, then
+  checks that a second plan finds nothing and `doctor` passes.
 - My Clutter finds similar images with Vision: resized and resaved copies
   of a photo, the one with the most pixels kept, the rest to the Trash after
   a confirm. Photos libraries are left alone.

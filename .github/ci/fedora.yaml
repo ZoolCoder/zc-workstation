@@ -1,0 +1,9 @@
+# The config CI applies, then checks with doctor, in a Fedora container.
+version: 1
+
+targets:
+  - name: dnf
+    provider: packages
+    os: [linux]
+    manager: dnf
+    file: ../../example/dnf.txt
