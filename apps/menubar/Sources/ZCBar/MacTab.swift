@@ -33,17 +33,17 @@ struct MacTab: View {
         VStack(alignment: .leading, spacing: 10) {
             hero
             ProtectionTile(store: store, security: snapshot.security, insecure: insecure)
-            Grid(horizontalSpacing: 8, verticalSpacing: 8) {
-                GridRow {
+            // Two columns that each stack their tiles, so a tile is only as
+            // tall as what it holds.
+            HStack(alignment: .top, spacing: 8) {
+                VStack(spacing: 8) {
                     diskTile
-                    memoryTile
-                }
-                GridRow {
-                    if let battery = vitals.battery { batteryTile(battery) } else { Color.clear }
-                    cpuTile
-                }
-                GridRow {
+                    if let battery = vitals.battery { batteryTile(battery) }
                     networkTile
+                }
+                VStack(spacing: 8) {
+                    memoryTile
+                    cpuTile
                     devicesTile
                 }
             }
@@ -64,23 +64,24 @@ struct MacTab: View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
                 if vitals.memory == nil {
-                    Text("Mac Health: …").font(.title3.weight(.bold))
+                    Text("Mac Health: …").font(.title2.weight(.bold))
                 } else {
                     let grade = vitals.grade(insecure: insecure)
-                    Text("Mac Health: \(Text(grade.rawValue).foregroundStyle(color(grade)))").font(.title3.weight(.bold))
+                    Text("Mac Health: \(Text(grade.rawValue).foregroundStyle(color(grade)))").font(.title2.weight(.bold))
                 }
                 Text(monitor.model).font(.caption).foregroundStyle(.secondary)
             }
             Spacer()
-            Image(systemName: "laptopcomputer").font(.system(size: 30)).foregroundStyle(.teal.gradient)
+            LaptopArt()
         }
+        .padding(.horizontal, 2)
     }
 
     private var diskTile: some View {
         Tile(symbol: "internaldrive", title: vitals.disk?.name ?? "Disk", link: "Free Up", selected: open == .disk,
              action: { toggle(.disk) }) {
             if let disk = vitals.disk {
-                Text("Available: \(Store.bytes(disk.available))").foregroundStyle(disk.isLow ? .orange : .secondary)
+                Text("Available: \(Store.bytes(disk.available))").foregroundStyle(disk.isLow ? Theme.warning : .secondary)
                 Text("of \(Store.bytes(disk.total))")
             }
         }
@@ -90,7 +91,7 @@ struct MacTab: View {
         Tile(symbol: "memorychip", title: "Memory", link: "Free Up", selected: open == .memory,
              action: { toggle(.memory) }) {
             if let m = vitals.memory {
-                Text("Pressure: \(m.pressure) %").foregroundStyle(m.pressure >= 75 ? .red : m.pressure >= 50 ? .orange : .secondary)
+                Text("Pressure: \(m.pressure) %").foregroundStyle(m.pressure >= 75 ? Theme.bad : m.pressure >= 50 ? Theme.warning : .secondary)
                 Text("\(Store.bytes(m.used, .memory)) of \(Store.bytes(m.total, .memory)) used")
             }
         }
@@ -101,7 +102,7 @@ struct MacTab: View {
             Text(b.state)
             if let capacity = b.capacity {
                 Text("Health \(capacity) %" + (b.cycles.map { " · \($0) cycles" } ?? ""))
-                    .foregroundStyle(b.needsService ? .orange : .secondary)
+                    .foregroundStyle(b.needsService ? Theme.warning : .secondary)
             }
         }
     }
@@ -174,15 +175,15 @@ struct MacTab: View {
 
     private func color(_ grade: Grade) -> Color {
         switch grade {
-        case .excellent: .teal
-        case .good: .green
-        case .fair: .orange
-        case .poor: .red
+        case .excellent: Theme.accent
+        case .good: Theme.good
+        case .fair: Theme.warning
+        case .poor: Theme.bad
         }
     }
 
     private func temperature(_ s: Sensors) -> Text {
-        Text("\(Int(s.cpuTemp.rounded()))°C").foregroundStyle(s.cpuTemp >= 95 ? .red : s.cpuTemp >= 80 ? .orange : .secondary)
+        Text("\(Int(s.cpuTemp.rounded()))°C").foregroundStyle(s.cpuTemp >= 95 ? Theme.bad : s.cpuTemp >= 80 ? Theme.warning : .secondary)
     }
 
     private func mbps(_ bits: Double) -> String { "\(Int((bits / 1_000_000).rounded())) Mbps" }
@@ -216,38 +217,50 @@ private struct Tile<Lines: View>: View {
     @ViewBuilder let lines: Lines
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 3) {
-            HStack(spacing: 6) {
-                Image(systemName: symbol).foregroundStyle(.secondary).frame(width: 18)
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Image(systemName: symbol).foregroundStyle(.white.opacity(0.9)).frame(width: 18)
                 Text(title).font(.callout.weight(.semibold)).lineLimit(1)
                 Spacer(minLength: 4)
                 if let value { value.font(.caption.monospacedDigit().weight(.semibold)) }
             }
-            VStack(alignment: .leading, spacing: 2) { lines }
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            Spacer(minLength: 0)
-            if let link {
-                HStack {
-                    Spacer()
-                    Button(link, action: action).buttonStyle(.link).font(.caption.weight(.semibold))
+            // The link sits beside the last line, as CleanMyMac's do.
+            HStack(alignment: .lastTextBaseline, spacing: 4) {
+                VStack(alignment: .leading, spacing: 3) { lines }
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Spacer(minLength: 0)
+                if let link {
+                    Button(link, action: action).buttonStyle(.zcLink).font(.callout.weight(.semibold))
                 }
             }
         }
-        .padding(10)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
         .modifier(Card(selected: selected))
     }
 }
 
-private struct Card: ViewModifier {
-    var selected = false
-
-    func body(content: Content) -> some View {
-        content
-            .background(RoundedRectangle(cornerRadius: 10).fill(Color.primary.opacity(0.05)))
-            .overlay(RoundedRectangle(cornerRadius: 10)
-                .strokeBorder(selected ? Color.accentColor : Color.primary.opacity(0.08)))
+/// The Mac in the hero: a glossy cyan screen on a silver base.
+private struct LaptopArt: View {
+    var body: some View {
+        VStack(spacing: 0) {
+            RoundedRectangle(cornerRadius: 5)
+                .fill(LinearGradient(colors: [Color(red: 0.62, green: 0.93, blue: 1), Color(red: 0.24, green: 0.58, blue: 1)],
+                                     startPoint: .top, endPoint: .bottom))
+                .overlay(alignment: .top) {
+                    // The glare across the top of the screen.
+                    RoundedRectangle(cornerRadius: 5)
+                        .fill(LinearGradient(colors: [.white.opacity(0.45), .clear], startPoint: .top, endPoint: .center))
+                }
+                .overlay(RoundedRectangle(cornerRadius: 5).strokeBorder(Color(white: 0.9), lineWidth: 2.5))
+                .frame(width: 54, height: 36)
+            UnevenRoundedRectangle(bottomLeadingRadius: 4, bottomTrailingRadius: 4)
+                .fill(LinearGradient(colors: [Color(white: 0.96), Color(red: 0.62, green: 0.72, blue: 0.9)],
+                                     startPoint: .top, endPoint: .bottom))
+                .frame(width: 68, height: 6)
+        }
+        .shadow(color: Theme.accent.opacity(0.55), radius: 12)
     }
 }
 
@@ -263,21 +276,27 @@ private struct ProtectionTile: View {
             HStack(alignment: .top, spacing: 10) {
                 Image(systemName: insecure == 0 ? "checkmark.shield.fill" : "exclamationmark.shield.fill")
                     .font(.title2)
-                    .foregroundStyle(insecure == 0 ? .green : .orange)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Protection").font(.callout.weight(.semibold))
+                    .symbolRenderingMode(.palette)
+                    .foregroundStyle(.white, insecure == 0 ? Theme.good : Theme.warning)
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 5) {
+                        Text("Protection by")
+                        BrandMark.image(size: 13)
+                        Text("ZC Doctor")
+                    }
+                    .font(.callout.weight(.semibold))
                     Text("\(passing.count) of \(security.count) security checks pass")
-                        .font(.caption).foregroundStyle(.secondary)
+                        .font(.caption.weight(.medium))
                     Text(passing.prefix(3).map(\.title).joined(separator: ", "))
-                        .font(.caption2).foregroundStyle(.tertiary).lineLimit(1)
+                        .font(.caption).foregroundStyle(.secondary).lineLimit(1)
                 }
                 Spacer()
                 Label(insecure == 0 ? "Protected" : "\(insecure) to fix",
                       systemImage: insecure == 0 ? "checkmark" : "exclamationmark.triangle")
                     .font(.caption.weight(.semibold))
-                    .foregroundStyle(insecure == 0 ? .green : .orange)
+                    .foregroundStyle(insecure == 0 ? .white : Theme.warning)
             }
-            .padding(10)
+            .padding(12)
             .frame(maxWidth: .infinity, alignment: .leading)
             .modifier(Card())
             .contentShape(Rectangle())
@@ -292,14 +311,10 @@ private struct Recommendation: View {
     let act: (Advice.Action) -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            SectionTitle(title: "Today's Recommendation")
-            HStack(alignment: .top, spacing: 10) {
-                Image(systemName: symbol)
-                    .font(.title3)
-                    .foregroundStyle(.white)
-                    .frame(width: 38, height: 38)
-                    .background(RoundedRectangle(cornerRadius: 9).fill(tint.gradient))
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Today's Recommendation").font(.headline).padding(.top, 6).padding(.leading, 2)
+            HStack(alignment: .top, spacing: 12) {
+                SymbolTile(symbol: symbol, colors: tint, size: 40)
                 VStack(alignment: .leading, spacing: 4) {
                     Text(advice.title).font(.callout.weight(.semibold))
                     Text(advice.body).font(.caption).foregroundStyle(.secondary)
@@ -307,12 +322,12 @@ private struct Recommendation: View {
                     if let button = advice.button {
                         HStack {
                             Spacer()
-                            Button(button) { act(advice.action) }.controlSize(.small)
+                            Button(button) { act(advice.action) }
                         }
                     }
                 }
             }
-            .padding(10)
+            .padding(12)
             .frame(maxWidth: .infinity, alignment: .leading)
             .modifier(Card())
         }
@@ -330,12 +345,12 @@ private struct Recommendation: View {
         }
     }
 
-    private var tint: Color {
+    private var tint: [Color] {
         switch advice.action {
-        case .none: .teal
-        case .updates: .blue
-        case .security: .orange
-        default: .pink
+        case .none: Tint.cyan
+        case .updates: Tint.blue
+        case .security: Tint.orange
+        default: Tint.pink
         }
     }
 }
@@ -356,9 +371,10 @@ private struct FreeUpList: View {
                 if store.monitor.scanning {
                     ProgressView().controlSize(.mini)
                 } else {
-                    Button("Rescan") { Task { await store.monitor.scan() } }.buttonStyle(.link).font(.caption)
+                    Button("Rescan") { Task { await store.monitor.scan() } }.buttonStyle(.zcLink).font(.caption)
                 }
             }
+            ListCard {
             ForEach(spots) { spot in
                 let size = store.monitor.junk[spot.id]
                 HStack(spacing: 8) {
@@ -385,6 +401,7 @@ private struct FreeUpList: View {
                     .disabled(store.busy != nil)
             }
             .modifier(Hover())
+            }
         }
     }
 
@@ -402,6 +419,7 @@ private struct TopList: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             SectionTitle(title: order == .memory ? "Using the most memory" : "Using the most CPU")
+            ListCard {
             if store.monitor.top.isEmpty {
                 ProgressView().controlSize(.small).frame(maxWidth: .infinity)
             }
@@ -422,6 +440,7 @@ private struct TopList: View {
                     }
                 }
                 .modifier(Hover())
+            }
             }
         }
     }

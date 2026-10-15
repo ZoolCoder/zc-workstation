@@ -53,9 +53,10 @@ final class PanelWindow: NSObject, NSWindowDelegate {
         panel.hasShadow = true
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         panel.delegate = self
+        // The panel draws its own background: no blur behind it to keep live.
         let root = PanelView(store: store)
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
-            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .clipShape(RoundedRectangle(cornerRadius: 14))
+            .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(Color.white.opacity(0.12)))
         // The window follows the view's size as tabs and sections change.
         let host = NSHostingController(rootView: AnyView(root))
         host.sizingOptions = [.preferredContentSize]

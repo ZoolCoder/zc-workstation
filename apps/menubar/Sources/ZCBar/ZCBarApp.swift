@@ -19,6 +19,7 @@ struct ZCBarApp: App {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     let store = Store()
     private lazy var window = PanelWindow(store: store)
+    private lazy var care = CareWindow(store: store)
     private lazy var hotkey = HotKey { [weak self] in self?.window.toggle() }
 
     /// SwiftUI takes URL events for itself, so the handler replaces its own
@@ -29,6 +30,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                                                      forEventClass: AEEventClass(kInternetEventClass),
                                                      andEventID: AEEventID(kAEGetURL))
         store.notifier.onOpen = { [weak self] in self?.window.show() }
+        store.openCare = { [weak self] in self?.care.show() }
         store.hotkeyChanged = { [weak self] on in on ? self?.hotkey.register() : self?.hotkey.unregister() }
         if store.hotkey { hotkey.register() }
         Task { await store.start() }
@@ -36,10 +38,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func open(_ event: NSAppleEventDescriptor, reply: NSAppleEventDescriptor) {
         guard let url = event.paramDescriptor(forKeyword: keyDirectObject)?.stringValue.flatMap(URL.init(string:)),
-              url.host() == "panel" else { return }
+              let host = url.host() else { return }
+        let parts = url.pathComponents.filter { $0 != "/" }
+        // zcbar://care opens the Care window, zcbar://care/applications a module.
+        if host == "care" {
+            care.show(parts.first.flatMap { name in Care.Module.allCases.first { $0.id.lowercased().hasPrefix(name) } })
+            return
+        }
+        guard host == "panel" else { return }
         // zcbar://panel/updates opens a tab, zcbar://panel/overview/home a
         // target in it, zcbar://panel/mac/disk a tile.
-        let parts = url.pathComponents.filter { $0 != "/" }
         guard let name = parts.first, let tab = Store.Tab.allCases.first(where: { $0.rawValue.lowercased() == name }) else {
             window.toggle()
             return
@@ -55,24 +63,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         window.show()
     }
 
+    @objc func showPanel() {
+        window.show()
+    }
+
     func applicationWillTerminate(_ notification: Notification) {
         store.stop()
     }
 }
 
-/// The menu bar icon: a laptop, with a count when something needs attention.
+/// The menu bar icon: the ZoolCoder mark, with a count when something needs
+/// attention, or ! when the CLI cannot run.
 struct StatusLabel: View {
     let store: Store
 
     var body: some View {
         let count = store.attention
-        if store.setupProblem != nil {
-            Image(systemName: "laptopcomputer.slash")
-        } else if count == 0 {
-            Image(systemName: "laptopcomputer")
-        } else {
-            HStack(spacing: 2) {
-                Image(systemName: "laptopcomputer.trianglebadge.exclamationmark")
+        HStack(spacing: 2) {
+            Image(nsImage: BrandMark.template)
+            if store.setupProblem != nil {
+                Text("!")
+            } else if count > 0 {
                 Text("\(count)")
             }
         }

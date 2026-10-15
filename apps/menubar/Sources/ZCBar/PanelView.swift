@@ -17,7 +17,7 @@ struct PanelView: View {
                 Tabs(store: store, snapshot: snapshot)
                 ScrollView {
                     VStack(alignment: .leading, spacing: 14) {
-                        ForEach(snapshot.errors, id: \.self) { Text($0).font(.caption).foregroundStyle(.red) }
+                        ForEach(snapshot.errors, id: \.self) { Text($0).font(.caption).foregroundStyle(Theme.bad) }
                         switch store.tab {
                         case .mac: MacTab(store: store, snapshot: snapshot)
                         case .overview: OverviewTab(store: store, snapshot: snapshot)
@@ -33,11 +33,12 @@ struct PanelView: View {
                 ProgressView("Reading this Mac…").frame(maxWidth: .infinity, minHeight: 200)
             }
             StatusLine(store: store)
-            Divider()
+            Rectangle().fill(Theme.rim).frame(height: 1).padding(.horizontal, -14)
             Footer(store: store)
         }
         .padding(14)
         .frame(width: 430)
+        .themed()
         .onAppear { store.refreshIfStale() }
     }
 }
@@ -49,24 +50,26 @@ private struct Header: View {
 
     var body: some View {
         HStack(alignment: .center, spacing: 10) {
-            Image(systemName: icon)
-                .font(.title2)
-                .foregroundStyle(tint)
-                .frame(width: 30)
+            Image(nsImage: NSApp.applicationIconImage)
+                .resizable()
+                .frame(width: 32, height: 32)
             VStack(alignment: .leading, spacing: 2) {
-                Text("ZC Workstation").font(.headline)
+                HStack(spacing: 6) {
+                    Text("ZC Workstation").font(.headline)
+                    Image(systemName: icon).font(.caption).foregroundStyle(tint)
+                }
                 Text(subtitle).font(.caption).foregroundStyle(.secondary)
             }
             Spacer()
             if store.refreshing {
-                ProgressView().controlSize(.small)
+                ProgressView().controlSize(.small).frame(width: 28, height: 28)
             } else {
                 Button {
                     Task { await store.refresh() }
                 } label: {
                     Image(systemName: "arrow.clockwise")
                 }
-                .buttonStyle(.borderless)
+                .buttonStyle(.icon)
                 .keyboardShortcut("r")
                 .disabled(store.setupProblem != nil)
                 .help("Read this Mac again (⌘R)")
@@ -75,13 +78,13 @@ private struct Header: View {
     }
 
     private var icon: String {
-        if store.setupProblem != nil { return "laptopcomputer.slash" }
+        if store.setupProblem != nil { return "exclamationmark.circle.fill" }
         return store.attention == 0 ? "checkmark.seal.fill" : "exclamationmark.triangle.fill"
     }
 
     private var tint: Color {
         if store.setupProblem != nil { return .secondary }
-        return store.attention == 0 ? .green : .orange
+        return store.attention == 0 ? Theme.good : Theme.warning
     }
 
     private var subtitle: String {
@@ -106,23 +109,22 @@ private struct Tabs: View {
                         Text(tab.rawValue)
                         if let n = count(tab), n > 0 {
                             Text("\(n)")
-                                .font(.caption2.monospacedDigit().weight(.semibold))
-                                .padding(.horizontal, 5)
-                                .background(Capsule().fill(store.tab == tab ? Color.white.opacity(0.25) : Color.orange.opacity(0.25)))
+                                .font(.caption2.monospacedDigit().weight(.bold))
+                                .foregroundStyle(Theme.warning)
                         }
                     }
-                    .font(.callout)
-                    .padding(.vertical, 4)
+                    .font(.callout.weight(store.tab == tab ? .semibold : .regular))
+                    .padding(.vertical, 5)
                     .frame(maxWidth: .infinity)
-                    .foregroundStyle(store.tab == tab ? Color.white : Color.primary)
-                    .background(RoundedRectangle(cornerRadius: 6).fill(store.tab == tab ? Color.accentColor : Color.clear))
+                    .foregroundStyle(store.tab == tab ? Color.white : Color.white.opacity(0.65))
+                    .background(RoundedRectangle(cornerRadius: 7).fill(store.tab == tab ? Color.white.opacity(0.16) : .clear))
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
             }
         }
         .padding(3)
-        .background(RoundedRectangle(cornerRadius: 8).fill(.quaternary))
+        .modifier(Card())
     }
 
     private func count(_ tab: Store.Tab) -> Int? {
@@ -147,7 +149,7 @@ private struct SetupCard: View {
         }
         .padding(10)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
+        .modifier(Card())
     }
 }
 
@@ -156,10 +158,11 @@ struct SectionTitle: View {
     var count: Int?
 
     var body: some View {
-        HStack(spacing: 4) {
-            Text(title.uppercased()).font(.caption.weight(.semibold)).foregroundStyle(.secondary)
-            if let count { Text("\(count)").font(.caption.monospacedDigit()).foregroundStyle(.tertiary) }
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+            Text(title).font(.headline)
+            if let count { Text("\(count)").font(.callout.monospacedDigit()).foregroundStyle(.secondary) }
         }
+        .padding(.leading, 2)
     }
 }
 
@@ -181,9 +184,9 @@ struct Hover: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .padding(.horizontal, 6)
-            .padding(.vertical, 3)
-            .background(RoundedRectangle(cornerRadius: 6).fill(over ? Color.primary.opacity(0.07) : .clear))
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
+            .background(RoundedRectangle(cornerRadius: 8).fill(over ? Color.white.opacity(0.07) : .clear))
             .onHover { over = $0 }
     }
 }
@@ -197,8 +200,10 @@ private struct OverviewTab: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             SectionTitle(title: "Targets")
-            ForEach(snapshot.visibleTargets) { t in
-                TargetBlock(store: store, target: t)
+            ListCard {
+                ForEach(snapshot.visibleTargets) { t in
+                    TargetBlock(store: store, target: t)
+                }
             }
         }
         if !store.jobs.isEmpty {
@@ -226,7 +231,7 @@ private struct TargetBlock: View {
                         .foregroundStyle(.tertiary)
                         .rotationEffect(.degrees(open ? 90 : 0))
                     Text(target.target).frame(width: 74, alignment: .leading).lineLimit(1)
-                    ProgressView(value: target.fraction).progressViewStyle(.linear).tint(tint)
+                    Meter(value: target.fraction, tint: tint)
                     Text(count).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
                         .frame(width: 56, alignment: .trailing)
                 }
@@ -247,8 +252,8 @@ private struct TargetBlock: View {
     }
 
     private var tint: Color {
-        if target.error != nil { return .red }
-        return target.gaps == 0 ? .green : .orange
+        if target.error != nil { return Theme.bad }
+        return target.gaps == 0 ? Theme.good : Theme.warning
     }
 }
 
@@ -259,7 +264,7 @@ private struct TargetDetail: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             if let error = target.error {
-                Text(error).font(.caption).foregroundStyle(.red)
+                Text(error).font(.caption).foregroundStyle(Theme.bad)
             } else if let items = store.targetItems[target.target] {
                 if items.isEmpty {
                     Text("Everything in place.").font(.caption).foregroundStyle(.secondary)
@@ -276,7 +281,7 @@ private struct TargetDetail: View {
                 }
                 Spacer()
                 Button("Dashboard") { Task { await store.openDashboard(path: "/targets/\(target.target)") } }
-                    .buttonStyle(.link).font(.caption)
+                    .buttonStyle(.zcLink).font(.caption)
             }
         }
         .padding(.vertical, 4)
@@ -313,9 +318,9 @@ private struct ItemRow: View {
 
     private var color: Color {
         switch item.state {
-        case "missing": .orange
-        case "differs": .yellow
-        default: .secondary
+        case "missing": Theme.warning.opacity(0.85)
+        case "differs": Color(red: 0.85, green: 0.7, blue: 0.2)
+        default: .white.opacity(0.25)
         }
     }
 }
@@ -328,7 +333,9 @@ private struct UpkeepSection: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             SectionTitle(title: "Upkeep")
-            ForEach(store.jobs) { job in JobRow(store: store, job: job) }
+            ListCard {
+                ForEach(store.jobs) { job in JobRow(store: store, job: job) }
+            }
         }
     }
 }
@@ -338,15 +345,15 @@ private struct JobRow: View {
     let job: Job
 
     var body: some View {
-        HStack(alignment: .top, spacing: 8) {
-            Image(systemName: symbol).foregroundStyle(color)
+        HStack(alignment: .center, spacing: 10) {
+            SymbolTile(symbol: symbol, colors: colors)
             VStack(alignment: .leading, spacing: 1) {
                 Text(job.label.replacingOccurrences(of: "local.", with: "")).lineLimit(1)
                 Text(detail).font(.caption).foregroundStyle(.secondary).lineLimit(2)
             }
             Spacer()
             if let log = job.log {
-                Button("Log") { NSWorkspace.shared.open(log) }.buttonStyle(.link).font(.caption)
+                Button("Log") { NSWorkspace.shared.open(log) }.buttonStyle(.zcLink).font(.caption)
             }
             Button("Run Now") { Task { await store.run(job) } }
                 .controlSize(.small)
@@ -360,7 +367,7 @@ private struct JobRow: View {
         return job.failed ? "xmark.circle.fill" : "clock"
     }
 
-    private var color: Color { job.failed ? .red : job.running ? .blue : .secondary }
+    private var colors: [Color] { job.failed ? Tint.red : job.running ? Tint.blue : Tint.violet }
 
     private var detail: String {
         var parts: [String] = []
@@ -387,10 +394,11 @@ private struct PlanSection: View {
             HStack {
                 SectionTitle(title: "Plan", count: plan.actions.count)
                 Spacer()
-                Button("Close", action: close).buttonStyle(.link).font(.caption)
+                Button("Close", action: close).buttonStyle(.zcLink).font(.caption)
             }
+            ListCard {
             if plan.actions.isEmpty {
-                Text("Nothing to change.").foregroundStyle(.secondary)
+                Text("Nothing to change.").foregroundStyle(.secondary).modifier(Hover())
             }
             ForEach(plan.actions) { a in
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
@@ -403,16 +411,18 @@ private struct PlanSection: View {
                         }
                     }
                 }
+                .modifier(Hover())
+            }
             }
         }
     }
 
     private func color(_ op: String) -> Color {
         switch op {
-        case "DELETE": .red
-        case "UPDATE": .orange
+        case "DELETE": Theme.bad
+        case "UPDATE": Theme.warning
         case "MANUAL": .secondary
-        default: .green
+        default: Theme.good
         }
     }
 }
@@ -444,7 +454,9 @@ private struct UpdatesTab: View {
                 ForEach(groups, id: \.0) { title, group in
                     VStack(alignment: .leading, spacing: 4) {
                         SectionTitle(title: title, count: group.count)
-                        ForEach(group) { item in UpdateRow(store: store, item: item) }
+                        ListCard {
+                            ForEach(group) { item in UpdateRow(store: store, item: item) }
+                        }
                     }
                 }
             }
@@ -468,7 +480,8 @@ private struct UpdateRow: View {
     let item: Item
 
     var body: some View {
-        HStack {
+        HStack(spacing: 10) {
+            AppIcon(item: item)
             VStack(alignment: .leading, spacing: 1) {
                 Text(item.app ?? item.name).lineLimit(1)
                 Text("\(short(item.version)) → \(short(item.latest))")
@@ -489,6 +502,33 @@ private struct UpdateRow: View {
     }
 }
 
+/// The app an update is for, by its own icon when it is installed.
+private struct AppIcon: View {
+    let item: Item
+
+    var body: some View {
+        if let icon = Self.icon(item) {
+            Image(nsImage: icon).resizable().frame(width: 28, height: 28)
+        } else {
+            SymbolTile(symbol: item.kind == "runtime" ? "chevron.left.forwardslash.chevron.right" : "shippingbox.fill",
+                       colors: item.kind == "runtime" ? Tint.violet : Tint.orange)
+        }
+    }
+
+    /// Looked up once per app: NSWorkspace reads the icon from disk.
+    @MainActor private static var cache: [String: NSImage] = [:]
+
+    @MainActor private static func icon(_ item: Item) -> NSImage? {
+        guard let app = item.app else { return nil }
+        if let hit = cache[app] { return hit }
+        let path = "/Applications/\(app).app"
+        guard FileManager.default.fileExists(atPath: path) else { return nil }
+        let icon = NSWorkspace.shared.icon(forFile: path)
+        cache[app] = icon
+        return icon
+    }
+}
+
 // MARK: Health
 
 private struct HealthTab: View {
@@ -501,13 +541,17 @@ private struct HealthTab: View {
                 Spacer()
                 if !store.ignoredFindings.isEmpty {
                     Button("Show \(store.ignoredFindings.count) ignored") { store.unignoreAll() }
-                        .buttonStyle(.link).font(.caption)
+                        .buttonStyle(.zcLink).font(.caption)
                 }
             }
             if store.findings.isEmpty {
                 EmptyNote(text: "Every check passes.", symbol: "checkmark.shield")
             }
-            ForEach(store.findings) { check in FindingRow(store: store, check: check) }
+            if !store.findings.isEmpty {
+                ListCard {
+                    ForEach(store.findings) { check in FindingRow(store: store, check: check) }
+                }
+            }
         }
     }
 }
@@ -517,13 +561,19 @@ private struct FindingRow: View {
     let check: Check
 
     var body: some View {
-        HStack(alignment: .top) {
-            Image(systemName: check.status == "fail" ? "xmark.octagon.fill" : "exclamationmark.triangle.fill")
-                .foregroundStyle(check.status == "fail" ? .red : .orange)
-            VStack(alignment: .leading, spacing: 1) {
+        HStack(alignment: .center, spacing: 10) {
+            SymbolTile(symbol: symbol, colors: check.status == "fail" ? Tint.red : Tint.orange)
+            VStack(alignment: .leading, spacing: 2) {
                 Text(check.title).lineLimit(1)
                 if let detail = check.detail {
-                    Text(detail).font(.caption).foregroundStyle(.secondary).lineLimit(2)
+                    // A command shows on one line; the tooltip holds all of it.
+                    if case .command = Fix(for: check) {
+                        Text(detail).font(.caption2.monospaced()).foregroundStyle(.secondary)
+                            .lineLimit(1).truncationMode(.middle)
+                            .help(detail)
+                    } else {
+                        Text(detail).font(.caption).foregroundStyle(.secondary).lineLimit(2)
+                    }
                 }
             }
             Spacer()
@@ -541,6 +591,14 @@ private struct FindingRow: View {
                 }
             }
         }
+    }
+
+    private var symbol: String {
+        let title = check.title.lowercased()
+        if title.contains("firewall") { return "flame.fill" }
+        if title.contains("password") || title.contains("touch id") { return "lock.fill" }
+        if title.contains("network") || title.contains("server") { return "network" }
+        return check.status == "fail" ? "xmark" : "exclamationmark"
     }
 
     private var fixTitle: String {
@@ -564,7 +622,9 @@ private struct ServicesTab: View {
         } else {
             VStack(alignment: .leading, spacing: 4) {
                 SectionTitle(title: "Services", count: services.count)
-                ForEach(services) { s in ServiceRow(store: store, item: s) }
+                ListCard {
+                    ForEach(services) { s in ServiceRow(store: store, item: s) }
+                }
             }
             if !store.jobs.isEmpty {
                 UpkeepSection(store: store)
@@ -578,8 +638,9 @@ private struct ServiceRow: View {
     let item: Item
 
     var body: some View {
-        HStack(spacing: 8) {
-            Circle().fill(item.isRunning ? Color.green : Color.red).frame(width: 7, height: 7)
+        HStack(spacing: 10) {
+            SymbolTile(symbol: item.kind == "agent" ? "clock.arrow.circlepath" : "gearshape.2.fill",
+                       colors: item.isRunning ? Tint.green : Tint.red)
             VStack(alignment: .leading, spacing: 1) {
                 Text(item.name).lineLimit(1)
                 Text("\(item.kind == "agent" ? "launch agent" : "brew service") · \(item.desc ?? item.state)")
@@ -629,11 +690,11 @@ private struct StatusLine: View {
         } else if let m = store.message {
             HStack(alignment: .top, spacing: 6) {
                 Image(systemName: m.failed ? "xmark.circle.fill" : "checkmark.circle.fill")
-                    .foregroundStyle(m.failed ? .red : .green)
+                    .foregroundStyle(m.failed ? Theme.bad : Theme.good)
                 Text(m.text).font(.caption).lineLimit(3)
                 Spacer()
                 if let log = m.log {
-                    Button("Log") { NSWorkspace.shared.open(log) }.buttonStyle(.link).font(.caption)
+                    Button("Log") { NSWorkspace.shared.open(log) }.buttonStyle(.zcLink).font(.caption)
                 }
                 Button { store.message = nil } label: { Image(systemName: "xmark") }
                     .buttonStyle(.borderless).font(.caption)
@@ -646,17 +707,35 @@ private struct Footer: View {
     @Bindable var store: Store
 
     var body: some View {
-        HStack {
-            Group {
-                Button("Plan") {
-                    store.tab = .overview
-                    Task { await store.showPlan() }
+        ZStack {
+            Button("Open ZC Care") { store.openCare?() }
+                .buttonStyle(.plain)
+                .font(.callout.weight(.medium))
+                .disabled(store.busy != nil || store.setupProblem != nil)
+            HStack(spacing: 6) {
+                Group {
+                    Button {
+                        store.tab = .overview
+                        Task { await store.showPlan() }
+                    } label: {
+                        Image(systemName: "list.bullet.rectangle")
+                    }
+                    .help("Plan: show what apply would change")
+                    Button { Task { await store.apply() } } label: {
+                        Image(systemName: "wand.and.stars")
+                    }
+                    .help("Apply…")
                 }
-                Button("Apply…") { Task { await store.apply() } }
+                .buttonStyle(.icon)
+                .disabled(store.busy != nil || store.setupProblem != nil)
                 Spacer()
-                Button("Dashboard") { Task { await store.openDashboard() } }
+                settings
             }
-            .disabled(store.busy != nil || store.setupProblem != nil)
+        }
+    }
+
+    private var settings: some View {
+        IconTile {
             Menu {
                 Toggle("Notifications", isOn: $store.notifies)
                 Toggle("Open Panel with ⌃⌥Z", isOn: $store.hotkey)
@@ -677,5 +756,6 @@ private struct Footer: View {
             .menuIndicator(.hidden)
             .fixedSize()
         }
+        .help("Settings")
     }
 }

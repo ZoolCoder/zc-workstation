@@ -73,6 +73,8 @@ final class Store {
     let notifier = Notifier()
     /// Set by the app delegate, which owns the hotkey.
     var hotkeyChanged: ((Bool) -> Void)?
+    /// Set by the app delegate, which owns the Care window.
+    var openCare: (() -> Void)?
 
     init() {
         ignored = Set(UserDefaults.standard.stringArray(forKey: Keys.ignored) ?? [])
@@ -100,6 +102,15 @@ final class Store {
     var findings: [Check] { snapshot?.findings(ignoring: ignored) ?? [] }
     var ignoredFindings: [Check] { snapshot?.findings.filter { ignored.contains($0.name) } ?? [] }
     var configPath: String? { workstation?.config }
+    /// The CLI and the login environment, for the Care window.
+    var cli: Workstation? { workstation }
+    var loginEnv: [String: String] { env }
+
+    /// A program on the login PATH, or in Homebrew's folder.
+    func program(_ name: String) -> String? {
+        let dirs = (env["PATH"] ?? "").split(separator: ":").map(String.init) + ["/opt/homebrew/bin"]
+        return dirs.map { $0 + "/" + name }.first(where: FileManager.default.isExecutableFile)
+    }
 
     // MARK: Refresh
 
@@ -297,22 +308,37 @@ final class Store {
     }
 
     /// The scheduled agents among the services, with what launchd says of
-    /// their last run.
+    /// their last run; launchctl is asked about every agent at once.
     private func readJobs(_ services: [Item]) async -> [Job] {
         var jobs: [Job] = []
         let home = NSHomeDirectory()
+        var plists: [(String, [String: Any], [DateComponents])] = []
         for agent in services where agent.kind == "agent" {
             let path = Launchd.plistPath(agent.name, home: home)
             guard let data = FileManager.default.contents(atPath: path),
                   let plist = try? PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any]
             else { continue }
             let schedule = Launchd.schedule(plist: plist)
-            guard !schedule.isEmpty else { continue }
-            var job = Job(label: agent.name, schedule: schedule)
-            if let r = try? await ProcessRunner().run("/bin/launchctl", ["print", "gui/\(getuid())/\(agent.name)"], env: [:]) {
-                (job.running, job.lastExit) = Launchd.parsePrint(r.output)
+            if !schedule.isEmpty { plists.append((agent.name, plist, schedule)) }
+        }
+        let uid = getuid()
+        let prints = await withTaskGroup(of: (String, String?).self) { group in
+            for (label, _, _) in plists {
+                group.addTask {
+                    let r = try? await ProcessRunner().run("/bin/launchctl", ["print", "gui/\(uid)/\(label)"], env: [:])
+                    return (label, r?.output)
+                }
             }
-            let log = Launchd.log(label: agent.name, plist: plist, home: home)
+            var outputs: [String: String] = [:]
+            for await (label, output) in group { outputs[label] = output }
+            return outputs
+        }
+        for (label, plist, schedule) in plists {
+            var job = Job(label: label, schedule: schedule)
+            if let output = prints[label] {
+                (job.running, job.lastExit) = Launchd.parsePrint(output)
+            }
+            let log = Launchd.log(label: label, plist: plist, home: home)
             if let attrs = try? FileManager.default.attributesOfItem(atPath: log) {
                 job.log = URL(fileURLWithPath: log)
                 job.lastRun = attrs[.modificationDate] as? Date
@@ -372,8 +398,11 @@ final class Store {
         NSWorkspace.shared.open(url)
     }
 
+    /// Asks for a static file: the dashboard itself measures every target,
+    /// which takes longer than this probe waits.
     private static func isServing() async -> Bool {
-        var request = URLRequest(url: URL(string: "http://127.0.0.1:7780/")!)
+        var request = URLRequest(url: URL(string: "http://127.0.0.1:7780/zc/theme.css")!)
+        request.httpMethod = "HEAD"
         request.timeoutInterval = 0.5
         return (try? await URLSession.shared.data(for: request)) != nil
     }

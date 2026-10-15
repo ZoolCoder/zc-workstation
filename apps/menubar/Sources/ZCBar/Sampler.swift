@@ -10,6 +10,10 @@ import ZCBarCore
 struct Sampler {
     private var lastTicks: (busy: UInt64, total: UInt64)?
     private var lastBytes: (interface: String, down: UInt64, up: UInt64, at: Date)?
+    /// Made once: a dynamic store is a connection to configd.
+    private let store = SCDynamicStoreCreate(nil, "ZCBar" as CFString, nil, nil)
+    /// Wi-Fi interface names, asked of CoreWLAN once.
+    private let wifiNames = Set(CWWiFiClient.shared().interfaceNames() ?? [])
 
     mutating func cpuLoad() -> Double? {
         var load = host_cpu_load_info()
@@ -80,10 +84,10 @@ struct Sampler {
 
     /// Bytes a second through the interface with the default route.
     mutating func network() -> Throughput? {
-        guard let name = Self.primaryInterface(), let (down, up) = Self.bytes(of: name) else { return nil }
+        guard let name = primaryInterface(), let (down, up) = Self.bytes(of: name) else { return nil }
         let now = Date.now
         defer { lastBytes = (name, down, up, now) }
-        let wifi = CWWiFiClient.shared().interfaceNames()?.contains(name) ?? false
+        let wifi = wifiNames.contains(name)
         guard let last = lastBytes, last.interface == name, down >= last.down, up >= last.up,
               now.timeIntervalSince(last.at) > 0 else {
             return Throughput(interface: name, wifi: wifi, down: 0, up: 0)
@@ -93,8 +97,7 @@ struct Sampler {
                           down: Double(down - last.down) / seconds, up: Double(up - last.up) / seconds)
     }
 
-    private static func primaryInterface() -> String? {
-        let store = SCDynamicStoreCreate(nil, "ZCBar" as CFString, nil, nil)
+    private func primaryInterface() -> String? {
         let global = SCDynamicStoreCopyValue(store, "State:/Network/Global/IPv4" as CFString) as? [String: Any]
         return global?["PrimaryInterface"] as? String
     }

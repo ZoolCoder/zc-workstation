@@ -29,7 +29,7 @@ public struct Junk: Sendable, Equatable, Identifiable {
 
     /// The bytes the folder's entries take on disk, less those kept.
     public func size(keeping extra: Set<String> = []) -> Int64 {
-        entries(keeping: extra).reduce(0) { $0 + Self.allocated($1) }
+        entries(keeping: extra).reduce(0) { $0 + DiskUsage.allocated($1) }
     }
 
     /// Removes every entry but those kept, and returns how many would not go:
@@ -44,16 +44,5 @@ public struct Junk: Sendable, Equatable, Identifiable {
         let all = (try? FileManager.default.contentsOfDirectory(at: URL(fileURLWithPath: path),
                                                                 includingPropertiesForKeys: nil)) ?? []
         return all.filter { !kept.contains($0.lastPathComponent) }
-    }
-
-    private static func allocated(_ url: URL) -> Int64 {
-        let key = URLResourceKey.totalFileAllocatedSizeKey
-        var total = Int64((try? url.resourceValues(forKeys: [key]))?.totalFileAllocatedSize ?? 0)
-        guard let files = FileManager.default.enumerator(at: url, includingPropertiesForKeys: [key],
-                                                         errorHandler: { _, _ in true }) else { return total }
-        for case let file as URL in files {
-            total += Int64((try? file.resourceValues(forKeys: [key]))?.totalFileAllocatedSize ?? 0)
-        }
-        return total
     }
 }
