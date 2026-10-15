@@ -42,6 +42,27 @@ func do(s *Server, method, path string, form url.Values) *httptest.ResponseRecor
 	return w
 }
 
+func TestDashboardShowsDriftAndRecentActivity(t *testing.T) {
+	s, _ := newPage(t)
+	if body := do(s, http.MethodGet, "/", nil).Body.String(); !strings.Contains(body, "no drift check yet") {
+		t.Fatal("dashboard without a drift file lacks the hint")
+	}
+	s.deps.DriftPath = filepath.Join(t.TempDir(), "drift.json")
+	d := `{"at":"2026-01-02T03:00:00Z","changes":3,"manual":1,"targets":{"notes":3}}`
+	if err := os.WriteFile(s.deps.DriftPath, []byte(d), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.deps.Activity.Append(activity.Entry{At: time.Now(), Kind: "apply", Target: "notes", OK: true}); err != nil {
+		t.Fatal(err)
+	}
+	body := do(s, http.MethodGet, "/", nil).Body.String()
+	for _, want := range []string{"3 change(s)", `href="/targets/notes">notes 3`, ">apply<"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("dashboard lacks %q", want)
+		}
+	}
+}
+
 func TestPagesRender(t *testing.T) {
 	s, _ := newPage(t)
 	for path, want := range map[string]string{

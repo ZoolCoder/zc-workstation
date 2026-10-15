@@ -49,6 +49,7 @@ func serveUI(ctx context.Context, addr, configPath, dataDir string, stdout io.Wr
 		// The page runs in the background: installers get no stdin, and
 		// their output goes to the terminal that started it.
 		Providers: engine.With(sh.Exec{Stdout: os.Stderr, Stderr: os.Stderr}),
+		DriftPath: driftFile(),
 		Host:      addr,
 	})
 	if err != nil {

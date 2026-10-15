@@ -40,6 +40,8 @@ type Deps struct {
 	Activity *activity.Log
 	// Providers is what the engine plans with.
 	Providers engine.Providers
+	// DriftPath is the file the drift command saves; empty shows no drift.
+	DriftPath string
 	// Host is the address the page is served on, shown in the sidebar.
 	Host string
 	// Has reports whether a program is on PATH; swapped in tests.
