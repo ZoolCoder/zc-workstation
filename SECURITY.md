@@ -42,6 +42,23 @@ Especially in scope:
   Review a config you did not write, as you would any script.
 * **Anything requiring an attacker to already have your shell.**
 
+## How the repository protects itself
+
+* `main`, `develop` and `v*` tags cannot be force-pushed or deleted, and
+  change only through pull requests with green CI. Only the maintainer can
+  push a release tag.
+* Every third-party action is pinned to a commit SHA, and the workflow token
+  is read-only unless a job asks for more.
+* Dependabot opens updates weekly after a seven-day cooldown, so a
+  compromised release has time to be caught before it lands here.
+* Secret scanning with push protection blocks a committed credential. Tests
+  and fixtures use no real path, host or account name.
+* `security.yml` runs CodeQL and govulncheck on every push and once
+  a week, because a vulnerability in a dependency arrives without a commit.
+
+`scripts/harden.sh` applies these settings to the GitHub repository, and
+`.github/rulesets/` holds the branch and tag rules it applies.
+
 ## Supported versions
 
 The latest release.

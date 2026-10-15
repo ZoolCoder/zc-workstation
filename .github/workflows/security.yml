@@ -2,7 +2,7 @@ name: security
 
 on:
   push:
-    branches: [main]
+    branches: [main, develop]
   schedule:
     # A vulnerability in a dependency arrives without a commit, so a scan that
     # only runs on push finds it whenever someone next happens to push.
