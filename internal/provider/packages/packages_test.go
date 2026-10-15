@@ -133,8 +133,20 @@ func TestApt(t *testing.T) {
 	if err != nil || strings.Join(resources(actions), ",") != "CREATE apt:zsh" {
 		t.Fatalf("plan %v %v", resources(actions), err)
 	}
+	lists := t.TempDir()
+	aptLists = lists
+	t.Cleanup(func() { aptLists = "/var/lib/apt/lists" })
+	// A fresh machine has no package lists yet: update them first.
 	_ = actions[0].Do(context.Background())
-	if r.Ran[0] != "sudo apt-get install -y zsh" {
+	if strings.Join(r.Ran, ",") != "sudo apt-get update,sudo apt-get install -y zsh" {
+		t.Fatalf("ran %v", r.Ran)
+	}
+	if err := os.WriteFile(filepath.Join(lists, "archive.ubuntu.com_dists_noble_InRelease"), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	r.Ran = nil
+	_ = actions[0].Do(context.Background())
+	if strings.Join(r.Ran, ",") != "sudo apt-get install -y zsh" {
 		t.Fatalf("ran %v", r.Ran)
 	}
 }

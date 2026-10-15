@@ -94,7 +94,14 @@ var managers = map[string]manager{
 			return map[string]set{"apt": have}, nil, nil
 		},
 		install: func(r sh.Runner, i item) func(context.Context) error {
-			return run(r, "sudo", "apt-get", "install", "-y", i.Name)
+			return func(ctx context.Context) error {
+				if !hasAptLists() {
+					if err := r.Run(ctx, "sudo", "apt-get", "update"); err != nil {
+						return err
+					}
+				}
+				return r.Run(ctx, "sudo", "apt-get", "install", "-y", i.Name)
+			}
 		},
 		details:  tabDetails("apt", "dpkg-query", "-W", "-f", "${Package}\t${Version}\t${binary:Summary}\t${Homepage}\n"),
 		chosen:   listChosen("apt", "apt-mark", "showmanual"),
@@ -134,6 +141,21 @@ var managers = map[string]manager{
 				"--accept-package-agreements", "--accept-source-agreements")
 		},
 	},
+}
+
+// aptLists is where apt keeps the package lists apt-get update downloads.
+var aptLists = "/var/lib/apt/lists"
+
+// hasAptLists reports whether apt has package lists. A fresh install or
+// container has none, and apt-get install then finds no package at all.
+func hasAptLists() bool {
+	entries, err := os.ReadDir(aptLists)
+	if err != nil {
+		return false
+	}
+	return slices.ContainsFunc(entries, func(e os.DirEntry) bool {
+		return !e.IsDir() && e.Name() != "lock"
+	})
 }
 
 func run(r sh.Runner, name string, args ...string) func(context.Context) error {

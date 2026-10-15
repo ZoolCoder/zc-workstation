@@ -80,6 +80,8 @@ here with what to edit.
 
 ### Providers
 
+- apt runs `apt-get update` first on a machine with no package lists yet,
+  such as a fresh install or container.
 - `keyboard` remaps keys on Linux with keyd. `assets/keyd/default.conf`
   makes Caps Lock Escape on tap and Hyper on hold, as Karabiner does on the
   Mac.
