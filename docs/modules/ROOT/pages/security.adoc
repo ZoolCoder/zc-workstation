@@ -29,8 +29,10 @@
   Review them as you would a script.
 * *The package sources.* Homebrew, apt, dnf, winget and mise verify what they
   download; `zc-workstation` adds nothing to that.
-* *`sudo`.* apt and dnf installs run `sudo`, which asks for your password in
-  the terminal. Agents cannot answer it.
+* *`sudo`.* Installs that run `sudo` ask for your password in the terminal,
+  or, with no terminal, in a macOS dialog that only you can answer. The
+  dialog is a script in the user cache folder; the password goes straight to
+  `sudo` and is never stored or seen by an agent.
 * *An attacker who already has your shell.*
 
 Report a problem through the repository's security policy, never a public

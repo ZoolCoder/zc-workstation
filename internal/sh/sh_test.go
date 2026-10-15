@@ -2,6 +2,7 @@ package sh
 
 import (
 	"context"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -34,5 +35,19 @@ func TestFake(t *testing.T) {
 	}
 	if !f.Has("a") || f.Has("b") {
 		t.Fatal("Has")
+	}
+}
+
+func TestAskpassOnlyWithoutTerminal(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CACHE_HOME", t.TempDir())
+	t.Setenv("SUDO_ASKPASS", "")
+	env := askpassEnv(strings.NewReader(""))
+	if !slices.ContainsFunc(env, func(v string) bool { return strings.HasPrefix(v, "SUDO_ASKPASS=/") }) {
+		t.Fatalf("no askpass in %v", env)
+	}
+	t.Setenv("SUDO_ASKPASS", "/bin/mine")
+	if env := askpassEnv(strings.NewReader("")); env != nil {
+		t.Fatal("overrode the caller's SUDO_ASKPASS")
 	}
 }

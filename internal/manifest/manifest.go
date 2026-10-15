@@ -67,6 +67,18 @@ func Insert(data []byte, section, entry string) []byte {
 	return []byte(strings.Join(raw, "\n") + "\n")
 }
 
+// Drop removes the entry whose key is want, matched without regard to case,
+// and reports whether there was one.
+func Drop(data []byte, key Key, want string) ([]byte, bool) {
+	raw := strings.Split(strings.TrimRight(string(data), "\n"), "\n")
+	for n, l := range scan(data) {
+		if k, ok := key(l.entry); ok && strings.EqualFold(k, want) {
+			return []byte(strings.Join(slices.Delete(raw, n, n+1), "\n") + "\n"), true
+		}
+	}
+	return data, false
+}
+
 // Line is an entry and its why, as one manifest line.
 func Line(entry, why string) (string, error) {
 	if strings.ContainsAny(why, "\r\n") {

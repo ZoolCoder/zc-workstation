@@ -19,7 +19,8 @@ type Runner interface {
 	// is an error that carries the program's standard error.
 	Output(ctx context.Context, name string, args ...string) ([]byte, error)
 	// Run runs a program attached to the terminal, for installs that may
-	// prompt (sudo, a license, a password manager).
+	// prompt (sudo, a license, a password manager). Without a terminal, sudo
+	// asks in a dialog instead.
 	Run(ctx context.Context, name string, args ...string) error
 	// Has reports whether a program is on PATH.
 	Has(name string) bool
@@ -48,6 +49,7 @@ func (Exec) Output(ctx context.Context, name string, args ...string) ([]byte, er
 func (e Exec) Run(ctx context.Context, name string, args ...string) error {
 	cmd := exec.CommandContext(ctx, name, args...)
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = e.Stdin, e.Stdout, e.Stderr
+	cmd.Env = askpassEnv(e.Stdin)
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("%s: %w", Line(name, args...), err)
 	}

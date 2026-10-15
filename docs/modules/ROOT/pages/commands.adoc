@@ -127,6 +127,23 @@ $ zc-workstation add -target runtimes -why "Builds zc-workstation" runtime:go@1.
 * App Store apps need their id: write the `mas` line yourself. winget files
   are not edited.
 
+== Remove
+
+`remove` uninstalls one item now and drops its line from the manifest, so the
+next plan does not bring it back. Apply only ever adds; `remove` is how
+something leaves.
+
+[source,console]
+----
+$ zc-workstation remove -target packages brew:htop
+removed brew:htop and dropped it from /Users/me/config/Brewfile
+$ zc-workstation remove -target packages mas:409201541
+----
+
+* The item is `kind:name` as `list` shows it. An item the manifest does not
+  declare is still uninstalled, so leftovers go through the tool too.
+* An App Store app that is not declared is named by its id.
+
 == Capture
 
 `capture` writes the manifest that would declare what the machine has: a
@@ -151,6 +168,11 @@ you only tried once. winget has its own: `winget export -o FILE`.
 Apply runs installers attached to your terminal, so `sudo`, a license prompt
 or an App Store sign-in can ask you. Their output goes to standard error, so
 `-json` output stays parseable.
+
+With no terminal, as under an AI agent or launchd, `sudo` asks for your
+password in a macOS dialog instead, through `SUDO_ASKPASS`; Touch ID still
+comes first when `sudo` is set up for it. A `SUDO_ASKPASS` you set yourself
+is left alone.
 
 == Deletions ask first
 

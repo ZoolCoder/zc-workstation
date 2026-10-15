@@ -42,6 +42,9 @@ type manager struct {
 	// could not be read, and its items become MANUAL with the reason.
 	installed func(ctx context.Context, r sh.Runner, items []item) (map[string]set, map[string]string, error)
 	install   func(r sh.Runner, i item) func(context.Context) error
+	// remove uninstalls one item; nil when zc-workstation does not remove
+	// with this manager.
+	remove func(r sh.Runner, i item) func(context.Context) error
 	// details reads versions and descriptions for the inventory; nil when
 	// the manager has no cheap way to say.
 	details func(ctx context.Context, r sh.Runner) (details, error)

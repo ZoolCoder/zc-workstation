@@ -60,6 +60,17 @@ var managers = map[string]manager{
 			}
 			return run(r, "brew", "install", i.Name)
 		},
+		remove: func(r sh.Runner, i item) func(context.Context) error {
+			switch i.Kind {
+			case "tap":
+				return run(r, "brew", "untap", i.Name)
+			case "cask":
+				return run(r, "brew", "uninstall", "--cask", i.Name)
+			case "mas":
+				return run(r, "mas", "uninstall", i.ID)
+			}
+			return run(r, "brew", "uninstall", i.Name)
+		},
 	},
 	"apt": {
 		program: "apt-get",

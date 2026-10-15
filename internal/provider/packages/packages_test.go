@@ -334,3 +334,25 @@ func TestAddDeclaresUnderASectionWithItsTap(t *testing.T) {
 		t.Fatalf("items %+v %v", items, err)
 	}
 }
+
+func TestRemoveUninstallsAndDropsTheLine(t *testing.T) {
+	tg := writeManifest(t, "Brewfile", "# Git\nbrew \"git\" # version control\nbrew \"htop\" # processes\nmas \"Pages\", id: 361309726 # documents\n")
+	r := &sh.Fake{}
+	p := New(r, "darwin")
+	if err := p.Remove(context.Background(), tg, "brew", "HTOP"); err != nil {
+		t.Fatal(err)
+	}
+	if err := p.Remove(context.Background(), tg, "mas", "Pages"); err != nil {
+		t.Fatal(err)
+	}
+	if err := p.Remove(context.Background(), tg, "mas", "409201541"); err != nil {
+		t.Fatal(err)
+	}
+	if want := "brew uninstall htop\nmas uninstall 361309726\nmas uninstall 409201541"; strings.Join(r.Ran, "\n") != want {
+		t.Fatalf("ran %q", r.Ran)
+	}
+	b, _ := os.ReadFile(tg.File)
+	if want := "# Git\nbrew \"git\" # version control\n"; string(b) != want {
+		t.Fatalf("Brewfile:\n%s", b)
+	}
+}
