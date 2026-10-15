@@ -8,6 +8,7 @@ import (
 	"os"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/zoolcoder/toolshell"
@@ -59,7 +60,7 @@ func (s *Server) dashboard(w http.ResponseWriter, r *http.Request) {
 		if eng, err = engine.New(cfg, s.deps.Providers, nil); err == nil {
 			c, cancel := ctx(r)
 			defer cancel()
-			s.fill(&p, cfg, eng.Status(c), eng.Programs())
+			s.fill(&p, cfg, s.statuses(c, cfg, eng), eng.Programs())
 		}
 	}
 	p.ConfigErr = err
@@ -132,10 +133,12 @@ func (s *Server) target(w http.ResponseWriter, r *http.Request) {
 	p.Title = name
 	if eng, err := engine.New(cfg, s.deps.Providers, []string{name}); err == nil {
 		c, cancel := ctx(r)
-		p.Live = eng.Status(c)[0]
+		var wg sync.WaitGroup
+		wg.Go(func() { p.Live = eng.Status(c)[0] })
 		for _, i := range eng.Items(c)[0].Items {
 			p.Items = append(p.Items, itemRow{Item: i, Target: name})
 		}
+		wg.Wait()
 		cancel()
 	}
 	if last, ok := s.lastRun(name); ok {

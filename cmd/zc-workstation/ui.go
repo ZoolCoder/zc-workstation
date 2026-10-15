@@ -54,6 +54,7 @@ func serveUI(ctx context.Context, addr, configPath, dataDir string, stdout io.Wr
 	if err != nil {
 		return err
 	}
+	go page.Warm(ctx)
 	return guard.ListenAndServe(ctx, addr, page, func(host string) {
 		fmt.Fprintf(stdout, "%s ui on http://%s/ (this machine only; Ctrl-C to stop)\n", name, host)
 	})

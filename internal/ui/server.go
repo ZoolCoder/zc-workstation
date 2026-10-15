@@ -8,6 +8,7 @@ package ui
 import (
 	"context"
 	"embed"
+	"fmt"
 	"html/template"
 	"io/fs"
 	"net/http"
@@ -55,6 +56,21 @@ type Server struct {
 
 	mu   sync.Mutex
 	runs map[string]run
+
+	live liveCache
+}
+
+// liveFor is how long the dashboard reuses a live status: brew alone takes
+// a second to list its services.
+const liveFor = 15 * time.Second
+
+// liveCache is the last live status of every target. Its lock is held while
+// one is measured, so a request that comes meanwhile waits for that one.
+type liveCache struct {
+	mu   sync.Mutex
+	key  string
+	at   time.Time
+	rows []engine.TargetStatus
 }
 
 // run is the last plan or apply the page made for one target.
@@ -150,6 +166,41 @@ func (s *Server) engine(names ...string) (*engine.Engine, error) {
 	return engine.New(cfg, s.deps.Providers, names)
 }
 
+// statuses is every target's live status, measured at most once per liveFor
+// for the same targets.
+func (s *Server) statuses(ctx context.Context, cfg config.Config, eng *engine.Engine) []engine.TargetStatus {
+	key := fmt.Sprint(cfg.Targets)
+	c := &s.live
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.key == key && s.deps.Now().Sub(c.at) < liveFor {
+		return c.rows
+	}
+	rows := eng.Status(ctx)
+	if ctx.Err() == nil {
+		c.key, c.at, c.rows = key, s.deps.Now(), rows
+	}
+	return rows
+}
+
+// forget drops the cached status, after a plan or apply.
+func (s *Server) forget() {
+	s.live.mu.Lock()
+	defer s.live.mu.Unlock()
+	s.live.key = ""
+}
+
+// Warm measures every target once, so the first page shows at once.
+func (s *Server) Warm(ctx context.Context) {
+	cfg, err := s.config()
+	if err != nil {
+		return
+	}
+	if eng, err := engine.New(cfg, s.deps.Providers, nil); err == nil {
+		s.statuses(ctx, cfg, eng)
+	}
+}
+
 func (s *Server) record(kind, target, detail string, err error) {
 	if s.deps.Activity == nil {
 		return
@@ -171,6 +222,7 @@ func (s *Server) setRun(name string, r run) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.runs[name] = r
+	s.forget()
 }
 
 func (s *Server) render(w http.ResponseWriter, name string, data any) {

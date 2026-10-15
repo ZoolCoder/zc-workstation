@@ -12,6 +12,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/zoolcoder/zc-workstation/internal/config"
 	"github.com/zoolcoder/zc-workstation/internal/plan"
@@ -47,22 +48,29 @@ type key struct {
 
 func (k key) resource() string { return k.domain + " " + k.name }
 
+// read asks defaults for every key at once: each read is its own process.
 func (p Provider) read(ctx context.Context, t config.Target) []key {
 	var keys []key
 	for _, domain := range slices.Sorted(maps.Keys(t.Defaults)) {
 		for _, name := range slices.Sorted(maps.Keys(t.Defaults[domain])) {
-			k := key{domain: domain, name: name, want: p.expand(t.Defaults[domain][name]), state: provider.Missing}
+			keys = append(keys, key{domain: domain, name: name, want: p.expand(t.Defaults[domain][name]), state: provider.Missing})
+		}
+	}
+	var wg sync.WaitGroup
+	for i := range keys {
+		k := &keys[i]
+		wg.Go(func() {
 			// A key that is not set makes defaults fail.
-			if out, err := p.r.Output(ctx, "defaults", "read", domain, name); err == nil {
+			if out, err := p.r.Output(ctx, "defaults", "read", k.domain, k.name); err == nil {
 				k.have = strings.TrimSpace(string(out))
 				k.state = provider.Differs
 				if same(k.want, k.have) {
 					k.state = provider.InPlace
 				}
 			}
-			keys = append(keys, k)
-		}
+		})
 	}
+	wg.Wait()
 	return keys
 }
 

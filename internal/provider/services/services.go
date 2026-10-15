@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 
 	"github.com/zoolcoder/zc-workstation/internal/config"
 	"github.com/zoolcoder/zc-workstation/internal/plan"
@@ -43,7 +44,21 @@ func Label(plist string) string { return strings.TrimSuffix(filepath.Base(plist)
 
 func (p Provider) domain() string { return fmt.Sprintf("gui/%d", p.uid) }
 
+// read asks launchctl about the agents while brew lists its services, the
+// slow part.
 func (p Provider) read(ctx context.Context, t config.Target) ([]service, error) {
+	agents := make([]service, len(t.Agents))
+	var wg sync.WaitGroup
+	for i, plist := range t.Agents {
+		wg.Go(func() {
+			s := service{kind: "agent", name: Label(plist), plist: plist, state: provider.Missing, detail: "not loaded"}
+			if _, err := p.r.Output(ctx, "launchctl", "print", p.domain()+"/"+s.name); err == nil {
+				s.state, s.detail = provider.InPlace, "loaded"
+			}
+			agents[i] = s
+		})
+	}
+	defer wg.Wait()
 	var out []service
 	if len(t.Services) > 0 {
 		status, err := p.brewStatus(ctx)
@@ -61,14 +76,8 @@ func (p Provider) read(ctx context.Context, t config.Target) ([]service, error) 
 			out = append(out, s)
 		}
 	}
-	for _, plist := range t.Agents {
-		s := service{kind: "agent", name: Label(plist), plist: plist, state: provider.Missing, detail: "not loaded"}
-		if _, err := p.r.Output(ctx, "launchctl", "print", p.domain()+"/"+s.name); err == nil {
-			s.state, s.detail = provider.InPlace, "loaded"
-		}
-		out = append(out, s)
-	}
-	return out, nil
+	wg.Wait()
+	return append(out, agents...), nil
 }
 
 // brewStatus maps each Homebrew service to its state, such as started.
