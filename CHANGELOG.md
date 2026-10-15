@@ -30,6 +30,9 @@ here with what to edit.
 
 ### Hardening
 
+- My Clutter finds similar images with Vision: resized and resaved copies
+  of a photo, the one with the most pixels kept, the rest to the Trash after
+  a confirm. Photos libraries are left alone.
 - Protection clears each browser's history, cookies or cache: Safari,
   Chrome, Brave, Edge, Arc, Vivaldi, Chromium and Firefox, only while that
   browser is closed. Bookmarks and passwords stay.

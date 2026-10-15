@@ -134,7 +134,7 @@ ZCBar sends it the count of open items for its `zcbar` item.
 | Protection | Shows Gatekeeper's verdict per app, background apps, the privacy permissions apps hold, and each browser's history, cookies and cache, cleared only while that browser is closed. |
 | Performance | Manages login items and runs maintenance: free RAM, flush DNS, thin Time Machine snapshots, reindex Spotlight, clean Homebrew, Docker and simulators. |
 | Applications | Uninstalls an app with what it keeps in the Library. *Adopt* replaces a hand-installed app with its Homebrew cask. Finds leftovers of removed apps. |
-| My Clutter | Finds large files, duplicates, old downloads and installers. |
+| My Clutter | Finds large files, duplicates, similar images (Vision keeps the one with the most pixels), old downloads and installers. |
 | Space Lens | Maps what fills your home folder. |
 | Developer | Finds `node_modules` and virtualenvs of projects untouched for 90 days, and local models from Ollama, LM Studio and Hugging Face. |
 | My Tools | Lists every tool as a searchable card, including *Screen Cleaning Mode*. |

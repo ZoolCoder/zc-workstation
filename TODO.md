@@ -21,8 +21,6 @@ same work. Remove the line in the pull request that finishes it.
 
 ## ZCBar and ZC Care
 
-- [ ] Similar Images in My Clutter: group photos that look alike, keep the
-      best, Trash the rest after a confirm.
 - [ ] Sign ZCBar with a Developer ID and notarise it, so Full Disk Access
       survives an update and Gatekeeper opens it without a warning.
 
