@@ -38,6 +38,10 @@ public struct Junk: Sendable, Equatable, Identifiable {
                  path: home + "/.cargo/registry/cache"),
             Junk(id: "cocoapods", title: "CocoaPods cache", detail: "Pods downloaded for iOS projects.",
                  path: home + "/Library/Caches/CocoaPods"),
+            Junk(id: "npx", title: "npx packages", detail: "Tools npx and MCP servers fetch; npx fetches them again on the next run.",
+                 path: home + "/.npm/_npx"),
+            Junk(id: "mail", title: "Mail downloads", detail: "Copies of attachments Mail saved on opening; the mail keeps the originals.",
+                 path: home + "/Library/Containers/com.apple.mail/Data/Library/Mail Downloads"),
             Junk(id: "logs", title: "Logs", detail: "What apps logged; ZCBar keeps its own.",
                  path: home + "/Library/Logs", keep: ["ZCBar"]),
         ]

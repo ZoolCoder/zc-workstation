@@ -45,6 +45,8 @@ final class Store {
     /// The target whose items the overview shows, and what they are.
     var expanded: String?
     var targetItems: [String: [Item]] = [:]
+    /// What ZC Care cleaned and ran, for My Activity.
+    var activity = ActivityLog.load(from: Store.activityFile)
     /// Launch agents that run on a calendar, such as the weekly upkeep.
     var jobs: [Job] = []
 

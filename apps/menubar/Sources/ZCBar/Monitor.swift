@@ -122,6 +122,15 @@ final class Monitor {
 extension Store {
     /// Clears the folder, or only the entries picked in Cleanup's preview,
     /// whose sizes `picked` gives.
+    /// Outside Caches: clearing caches must not clear the record of it.
+    static let activityFile = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        .appendingPathComponent("dev.zoolcoder.zcbar/activity.json")
+
+    func record(_ kind: ActivityEntry.Kind, _ title: String, freed bytes: Int64 = 0) {
+        activity.entries.append(ActivityEntry(kind: kind, title: title, bytes: bytes))
+        try? activity.save(to: Self.activityFile)
+    }
+
     func clean(_ spot: Junk, only picked: [JunkEntry]? = nil) async {
         let size = monitor.junk[spot.id] ?? 0
         let what = picked.map { "This deletes \($0.count) items, \(Self.bytes($0.reduce(0) { $0 + $1.size })), in \(spot.path)." }
@@ -135,6 +144,7 @@ extension Store {
         let left = await Task.detached { spot.size(keeping: keep) }.value
         monitor.junk[spot.id] = left
         monitor.readDisk()
+        record(.junk, spot.title, freed: max(size - left, 0))
         message = Message(text: "\(spot.title): freed \(Self.bytes(max(size - left, 0)))"
                           + (stuck > 0 ? "; \(stuck) in use stayed." : "."), failed: false)
     }
@@ -160,6 +170,7 @@ extension Store {
             freed += max(size - left, 0)
         }
         monitor.readDisk()
+        record(.junk, "System Junk", freed: freed)
         message = Message(text: "Freed \(Self.bytes(freed))" + (stuck > 0 ? "; \(stuck) in use stayed." : "."), failed: false)
     }
 
@@ -170,8 +181,10 @@ extension Store {
                                           button: "Empty Trash") else { return }
         busy = "Emptying the Trash"
         defer { busy = nil }
+        let before = monitor.vitals.disk?.available ?? 0
         let r = try? await ProcessRunner().run("/usr/bin/osascript", ["-e", #"tell application "Finder" to empty trash"#], env: [:])
         monitor.readDisk()
+        if r?.status == 0 { record(.junk, "Trash Bins", freed: max((monitor.vitals.disk?.available ?? 0) - before, 0)) }
         message = r?.status == 0
             ? Message(text: "The Trash is empty.", failed: false)
             : Message(text: "Trash not emptied. \(r?.stderr ?? "")", failed: true)

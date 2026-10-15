@@ -356,3 +356,54 @@ private func write(_ url: URL, bytes: Int) throws {
         #expect(caches.keep.contains((spot.path as NSString).lastPathComponent))
     }
 }
+
+@Test func aiClutterFindsJunkAndKeepsTheRunningVersion() throws {
+    let home = try tempDir()
+    defer { try? FileManager.default.removeItem(at: home) }
+    let versions = home.appendingPathComponent(".local/share/claude/versions")
+    try write(versions.appendingPathComponent("2.1.0"), bytes: 300_000)
+    try write(versions.appendingPathComponent("2.2.0"), bytes: 200_000)
+    try FileManager.default.createDirectory(at: home.appendingPathComponent(".local/bin"), withIntermediateDirectories: true)
+    try FileManager.default.createSymbolicLink(atPath: home.path + "/.local/bin/claude", withDestinationPath: versions.path + "/2.2.0")
+    let temp = home.appendingPathComponent("tmp/claude-501")
+    try write(temp.appendingPathComponent("old/x"), bytes: 100_000)
+    try write(temp.appendingPathComponent("busy/x"), bytes: 100_000)
+    try FileManager.default.setAttributes([.modificationDate: Date(timeIntervalSinceNow: -3 * 86400)],
+                                          ofItemAtPath: temp.appendingPathComponent("old").path)
+    try write(home.appendingPathComponent("Library/Application Support/Cursor/Cache/a"), bytes: 50_000)
+    try write(home.appendingPathComponent("Library/Application Support/Cursor/User/settings.json"), bytes: 50_000)
+
+    let found = AIClutter.find(home: home.path, claudeTemp: temp.path)
+
+    #expect(found.map(\.id) == ["Claude Code Stale Versions", "Claude Code Temp Files", "Cursor Caches"])
+    #expect(found[0].paths.map(\.lastPathComponent) == ["2.1.0"])
+    #expect(found[1].paths.map(\.lastPathComponent) == ["old"])
+}
+
+@Test func aiClutterCallsNoVersionStaleWithoutTheLink() throws {
+    let home = try tempDir()
+    defer { try? FileManager.default.removeItem(at: home) }
+    try write(home.appendingPathComponent(".local/share/claude/versions/2.1.0"), bytes: 300_000)
+
+    #expect(AIClutter.find(home: home.path, claudeTemp: home.path + "/none").isEmpty)
+}
+
+@Test func activityLogTotalsByKind() throws {
+    let now = Date()
+    let log = ActivityLog(entries: [
+        ActivityEntry(date: now.addingTimeInterval(-10 * 86400), kind: .junk, title: "Caches", bytes: 500),
+        ActivityEntry(date: now.addingTimeInterval(-86400), kind: .ai, title: "Claude Code", bytes: 300),
+        ActivityEntry(date: now, kind: .junk, title: "Logs", bytes: 100),
+        ActivityEntry(date: now, kind: .maintenance, title: "Flush DNS Cache", bytes: 0),
+    ])
+
+    #expect(log.freed == 900)
+    #expect(log.freedByKind.map(\.kind) == [.junk, .ai])
+    #expect(log.runsByKind.first?.count == 2)
+    #expect(log.freed(lastDays: 7, now: now) == 400)
+
+    let url = FileManager.default.temporaryDirectory.appendingPathComponent("zcbar-\(UUID().uuidString)/activity.json")
+    defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+    try log.save(to: url)
+    #expect(ActivityLog.load(from: url) == log)
+}

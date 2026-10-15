@@ -7,8 +7,13 @@ import ZCBarCore
 @MainActor @Observable
 final class Care {
     enum Module: String, CaseIterable, Identifiable {
-        case smartCare = "Smart Care", cleanup = "Cleanup", clutter = "My Clutter", developer = "Developer"
-        case apps = "Applications", performance = "Performance", protection = "Protection", spaceLens = "Space Lens"
+        case smartCare = "Smart Care", cleanup = "Cleanup", protection = "Protection", performance = "Performance"
+        case apps = "Applications", clutter = "My Clutter", spaceLens = "Space Lens", developer = "Developer"
+        case tools = "My Tools", activity = "My Activity"
+
+        /// The sidebar's two groups, as CleanMyMac splits them.
+        static let modules: [Module] = [.smartCare, .cleanup, .protection, .performance, .apps, .clutter, .spaceLens, .developer]
+        static let extras: [Module] = [.tools, .activity]
 
         var id: String { rawValue }
         var symbol: String {
@@ -21,6 +26,8 @@ final class Care {
             case .performance: "gauge.with.dots.needle.67percent"
             case .protection: "lock.shield.fill"
             case .spaceLens: "chart.pie.fill"
+            case .tools: "square.grid.3x3.fill"
+            case .activity: "chart.bar.xaxis"
             }
         }
     }
@@ -36,6 +43,9 @@ final class Care {
     /// node_modules and the like in projects left alone for 90 days.
     var dependencies: [LargeFile] = []
     var models: [AIModel] = []
+    /// Caches, logs, temp files and old versions AI tools leave.
+    var aiJunk: [AIJunk] = []
+    var scanningAI = false
     var scanningDeveloper = false
     /// Nil until looked for: what removed apps left in the Library.
     var orphans: [Orphan]?
@@ -61,6 +71,8 @@ final class Care {
     var background: [NSRunningApplication] = []
     /// False until a scan runs in this launch: what shows before came from disk.
     var fresh = false
+    /// Modules past their intro in this launch.
+    var entered: Set<Module> = []
 
     /// Large Files lists files from this size up.
     nonisolated static let largeFile: Int64 = 200 * 1024 * 1024
@@ -86,8 +98,39 @@ final class Care {
     var untrusted: [InstalledApp] { apps.filter { assessments[$0.id].map { !$0.trusted } ?? false } }
     var undeclared: [InstalledApp] { apps.filter { $0.declared == nil } }
     var unused: [InstalledApp] { apps.filter { $0.unused() } }
+    var ai: Int64 { aiJunk.reduce(0) { $0 + $1.size } }
     var developer: Int64 { dependencies.reduce(0) { $0 + $1.size } + models.reduce(0) { $0 + $1.size } }
     var startup: [LaunchAgent] { agents.filter { $0.enabled && ($0.runAtLoad || $0.keepAlive) } }
+
+    /// A module opens on its intro until its Scan is pressed; those Smart
+    /// Care fills skip it once any scan has run.
+    func showsIntro(_ m: Module) -> Bool {
+        guard !entered.contains(m) else { return false }
+        switch m {
+        case .smartCare, .cleanup, .clutter, .apps, .performance, .developer: return scannedAt == nil && !scanning
+        case .spaceLens: return space == nil && !scanningSpace
+        case .protection: return true
+        case .tools, .activity: return false
+        }
+    }
+
+    /// The intro's Scan: leaves the intro and reads what the module shows.
+    /// Protection and Performance read on appearing.
+    func enter(_ m: Module) async {
+        entered.insert(m)
+        switch m {
+        case .smartCare: await scan()
+        case .cleanup:
+            async let junk: Void = monitor.scan()
+            async let ai: Void = scanAI()
+            _ = await (junk, ai)
+        case .clutter: await scanFiles()
+        case .developer: await scanDeveloper()
+        case .apps: await loadApps()
+        case .spaceLens: await scanSpace()
+        case .protection, .performance, .tools, .activity: break
+        }
+    }
 
     // MARK: Scan
 
@@ -102,7 +145,8 @@ final class Care {
         async let apps: Void = loadApps()
         async let agents: Void = loadAgents()
         async let developer: Void = scanDeveloper()
-        _ = await (junk, state, files, apps, agents, developer)
+        async let ai: Void = scanAI()
+        _ = await (junk, state, files, apps, agents, developer, ai)
         scannedAt = .now
         fresh = true
         save()
@@ -209,6 +253,7 @@ final class Care {
                 return group.files.count > 1 ? group : nil
             }
             monitor.readDisk()
+            store.record(.files, file.name, freed: file.size)
             store.message = Store.Message(text: "\(file.name) is in the Trash.", failed: false)
         } catch {
             store.message = Store.Message(text: error.localizedDescription, failed: true)
@@ -243,6 +288,7 @@ final class Care {
         let failure = await recycle(folders.map(\.url))
         let gone = Set(folders.map(\.id))
         dependencies.removeAll { gone.contains($0.id) && !FileManager.default.fileExists(atPath: $0.url.path) }
+        if failure == nil { store.record(.developer, "Project Dependencies", freed: total) }
         store.message = failure.map { Store.Message(text: $0, failed: true) }
             ?? Store.Message(text: "\(Store.bytes(total)) of dependencies are in the Trash.", failed: false)
         monitor.readDisk()
@@ -259,9 +305,83 @@ final class Care {
             store.message = Store.Message(text: "\(model.name): \(failure)", failed: true)
         } else {
             models.removeAll { $0.id == model.id }
+            store.record(.developer, model.name, freed: model.size)
             store.message = Store.Message(text: "\(model.name) is in the Trash.", failed: false)
         }
         monitor.readDisk()
+    }
+
+    // MARK: Recommendations
+
+    struct Recommendation: Identifiable {
+        let symbol: String
+        let title: String
+        let module: Module
+        var id: String { title }
+    }
+
+    /// What the last scan found worth doing, for My Activity.
+    var recommendations: [Recommendation] {
+        var r: [Recommendation] = []
+        if scannedAt.map({ Date.now.timeIntervalSince($0) > 7 * 86400 }) ?? true {
+            r.append(Recommendation(symbol: "sparkles", title: "Run Smart Care: no scan this week", module: .smartCare))
+        }
+        if junk > 500_000_000 { r.append(Recommendation(symbol: "trash.fill", title: "Clean \(Store.bytes(junk)) of system junk", module: .cleanup)) }
+        if ai > 200_000_000 { r.append(Recommendation(symbol: "brain.head.profile", title: "Clear \(Store.bytes(ai)) of AI clutter", module: .cleanup)) }
+        let outdated = store.snapshot?.outdated.count ?? 0
+        if outdated > 0 { r.append(Recommendation(symbol: "arrow.down.circle.fill", title: "Update \(outdated) packages", module: .apps)) }
+        let findings = store.findings.count
+        if findings > 0 { r.append(Recommendation(symbol: "stethoscope", title: findings == 1 ? "Look at 1 health finding" : "Look at \(findings) health findings", module: .smartCare)) }
+        if !untrusted.isEmpty {
+            r.append(Recommendation(symbol: "exclamationmark.shield.fill", title: "Check \(untrusted.count) apps Gatekeeper rejects", module: .protection))
+        }
+        let idle = dependencies.reduce(0) { $0 + $1.size }
+        if idle > 1_000_000_000 {
+            r.append(Recommendation(symbol: "shippingbox.fill", title: "Remove \(Store.bytes(idle)) of idle project dependencies", module: .developer))
+        }
+        if clutter > 1_000_000_000 { r.append(Recommendation(symbol: "doc.on.doc.fill", title: "Review \(Store.bytes(clutter)) of large files", module: .clutter)) }
+        if !unused.isEmpty { r.append(Recommendation(symbol: "square.grid.2x2.fill", title: "Uninstall \(unused.count) unused apps", module: .apps)) }
+        if startup.count > 10 { r.append(Recommendation(symbol: "power", title: "Review \(startup.count) login items", module: .performance)) }
+        return r
+    }
+
+    /// Opens a module, past its intro, scanning what it shows if nothing has.
+    func open(_ m: Module) {
+        module = m
+        if showsIntro(m) { Task { await enter(m) } }
+    }
+
+    // MARK: AI Clutter
+
+    func scanAI() async {
+        scanningAI = true
+        defer { scanningAI = false }
+        let home = NSHomeDirectory()
+        let temp = "/private/tmp/claude-\(getuid())"
+        aiJunk = await Task.detached(priority: .utility) { AIClutter.find(home: home, claudeTemp: temp) }.value
+    }
+
+    /// Deletes the picked junk for good, as Cleanup clears caches: each tool
+    /// makes it again when it needs it.
+    func cleanAI(_ picked: [AIJunk]) async {
+        guard store.busy == nil, !picked.isEmpty else { return }
+        let total = picked.reduce(0) { $0 + $1.size }
+        let list = picked.map { "\($0.tool), \($0.kind): \(Store.bytes($0.size))" }.joined(separator: "\n")
+        guard Alerts.confirm("Clear \(Store.bytes(total)) of AI clutter?",
+                             list + "\n\nChats, settings, sessions and the running Claude Code version stay.",
+                             button: "Clear") else { return }
+        store.busy = "Clearing AI clutter"
+        defer { store.busy = nil }
+        let paths = picked.flatMap(\.paths)
+        let stuck = await Task.detached {
+            paths.filter { (try? FileManager.default.removeItem(at: $0)) == nil }.count
+        }.value
+        await scanAI()
+        let freed = max(total - picked.reduce(0) { sum, p in sum + (aiJunk.first { $0.id == p.id }?.size ?? 0) }, 0)
+        store.record(.ai, picked.count == 1 ? picked[0].tool : "AI Clutter", freed: freed)
+        monitor.readDisk()
+        store.message = Store.Message(text: "AI clutter: freed \(Store.bytes(freed))" + (stuck > 0 ? "; \(stuck) in use stayed." : "."),
+                                      failed: false)
     }
 
     // MARK: Applications
@@ -349,6 +469,7 @@ final class Care {
             store.message = Store.Message(text: "\(app.name): \(failure)", failed: true)
         } else {
             apps.removeAll { $0.id == app.id }
+            store.record(.apps, app.name, freed: app.size ?? 0)
             store.message = Store.Message(text: "\(app.name) is uninstalled.", failed: false)
         }
         monitor.readDisk()
@@ -380,6 +501,7 @@ final class Care {
         let failure = await recycle(picked.flatMap { $0.paths.map(URL.init(fileURLWithPath:)) })
         let gone = Set(picked.map(\.id))
         orphans?.removeAll { o in gone.contains(o.id) && !o.paths.contains(where: FileManager.default.fileExists) }
+        if failure == nil { store.record(.apps, "App Leftovers", freed: total) }
         store.message = failure.map { Store.Message(text: $0, failed: true) }
             ?? Store.Message(text: "Leftovers of \(picked.count) apps are in the Trash.", failed: false)
         monitor.readDisk()
@@ -522,6 +644,7 @@ final class Care {
                 if r?.status != 0 { failure = lastLine(r?.stderr) ?? "\(step[0]) failed"; break }
             }
         }
+        if failure == nil { store.record(.maintenance, task.title) }
         store.message = failure.map { Store.Message(text: "\(task.title): \($0)", failed: true) }
             ?? Store.Message(text: "\(task.title): done.", failed: false)
         monitor.readDisk()
