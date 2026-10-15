@@ -18,7 +18,7 @@ from the manifest stays installed, because removing software is your call.
 | `brew`
 | A Brewfile: `tap`, `brew`, `cask` and `mas` entries
 | `brew list --formula`, `brew list --cask`, `brew tap`, `mas list`
-| `brew tap`, `brew install`, `brew install --cask`, `mas install ID`
+| `brew tap`, `brew install`, `brew install --cask --adopt`, `mas install ID`
 
 | `apt`
 | One package per line, `#` comments
@@ -81,8 +81,10 @@ still list without it.
 * `mas` entries are `MANUAL` until `mas` is installed.
 * If the manager itself is missing, the plan is one `MANUAL` step to install
   it.
-* An app installed outside the manager is not seen. Homebrew then refuses to
-  install the cask over it; delete the app or remove the entry.
+* An app installed outside the manager is not seen. Its cask is installed
+  with `--adopt`, so Homebrew takes over the app already there; if the app
+  differs from the cask, Homebrew refuses, and you delete the app or remove
+  the entry.
 
 [#dotfiles]
 == dotfiles

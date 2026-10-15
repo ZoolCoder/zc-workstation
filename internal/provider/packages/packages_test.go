@@ -75,7 +75,7 @@ func TestBrewPlanInstallsWhatIsMissing(t *testing.T) {
 		}
 	}
 	ran := strings.Join(r.Ran, "\n")
-	if ran != "brew tap hashicorp/tap\nbrew trust hashicorp/tap\nbrew install --cask ghostty\nmas install 6745342698" {
+	if ran != "brew tap hashicorp/tap\nbrew trust hashicorp/tap\nbrew install --cask --adopt ghostty\nmas install 6745342698" {
 		t.Fatalf("ran\n%s", ran)
 	}
 }
@@ -326,7 +326,7 @@ func TestAddDeclaresUnderASectionWithItsTap(t *testing.T) {
 		t.Fatal(err)
 	}
 	b, _ := os.ReadFile(tg.File)
-	if want := "tap \"a/b\"\ntap \"cirruslabs/cli\"\n\n# Git\nbrew \"git\" # version control\nbrew \"cirruslabs/cli/tart\" # macOS VMs\n"; string(b) != want {
+	if want := "tap \"a/b\"\ntap \"cirruslabs/cli\" # tart\n\n# Git\nbrew \"git\" # version control\nbrew \"cirruslabs/cli/tart\" # macOS VMs\n"; string(b) != want {
 		t.Fatalf("Brewfile:\n%s", b)
 	}
 	items, err := p.Items(context.Background(), tg)

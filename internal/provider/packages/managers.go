@@ -54,7 +54,7 @@ var managers = map[string]manager{
 					return r.Run(ctx, "brew", "trust", i.Name)
 				}
 			case "cask":
-				return run(r, "brew", "install", "--cask", i.Name)
+				return run(r, "brew", "install", "--cask", "--adopt", i.Name)
 			case "mas":
 				return run(r, "mas", "install", i.ID)
 			}

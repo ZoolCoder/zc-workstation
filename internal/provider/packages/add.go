@@ -50,7 +50,7 @@ func (p Provider) Add(t config.Target, e provider.Entry) error {
 	}
 	data = manifest.Insert(data, e.Section, line)
 	if tap := tapOf(e.Name); name == "brew" && kind != "tap" && tap != "" && !declares(items, "tap", tap) {
-		data = manifest.Insert(data, "", `tap "`+tap+`"`)
+		data = manifest.Insert(data, "", `tap "`+tap+`" # `+e.Name[len(tap)+1:])
 	}
 	return writeFile(t.File, data)
 }
