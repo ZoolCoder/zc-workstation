@@ -30,6 +30,9 @@ here with what to edit.
 
 ### Hardening
 
+- Protection clears each browser's history, cookies or cache: Safari,
+  Chrome, Brave, Edge, Arc, Vivaldi, Chromium and Firefox, only while that
+  browser is closed. Bookmarks and passwords stay.
 - Releases ship ZCBar too: a universal app, attested, with a `zcbar` cask
   in the tap (`brew install --cask zcbar`).
 - `doctor` checks SSH keys without a passphrase, commit signing, secrets in

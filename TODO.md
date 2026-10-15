@@ -23,8 +23,6 @@ same work. Remove the line in the pull request that finishes it.
 
 - [ ] Similar Images in My Clutter: group photos that look alike, keep the
       best, Trash the rest after a confirm.
-- [ ] Browser privacy data in Protection: history, cookies and caches per
-      browser, cleared only for a browser that is closed.
 - [ ] Sign ZCBar with a Developer ID and notarise it, so Full Disk Access
       survives an update and Gatekeeper opens it without a warning.
 

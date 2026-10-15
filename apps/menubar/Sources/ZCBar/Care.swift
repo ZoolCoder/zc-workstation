@@ -61,6 +61,8 @@ final class Care {
     /// Nil until read; the TCC databases need Full Disk Access.
     var permissions: [Permission]?
     var loadingProtection = false
+    /// History, cookies and caches per browser; nil until read.
+    var browserTraces: [BrowserTrace]?
     var loadingBackground = false
     var space: SpaceScan?
     var scanningSpace = false
@@ -663,6 +665,7 @@ final class Care {
         async let tcc = readPermissions()
         gatekeeper = await status.map { $0.output.contains("assessments enabled") }
         permissions = await tcc
+        await loadBrowserTraces()
         await withTaskGroup(of: (String, Assessment).self) { group in
             for app in apps where assessments[app.id] == nil {
                 group.addTask {
@@ -672,6 +675,42 @@ final class Care {
             }
             for await (id, a) in group { assessments[id] = a }
         }
+    }
+
+    func loadBrowserTraces() async {
+        let home = NSHomeDirectory()
+        browserTraces = await Task.detached(priority: .utility) { BrowserPrivacy.find(home: home) }.value
+    }
+
+    func isRunning(_ bundleID: String) -> Bool {
+        NSWorkspace.shared.runningApplications.contains { $0.bundleIdentifier == bundleID }
+    }
+
+    /// Deletes one browser's history, cookies or cache, only while that
+    /// browser is closed: an open one holds the databases and writes them back.
+    func clearBrowser(_ trace: BrowserTrace) async {
+        guard store.busy == nil else { return }
+        guard !isRunning(trace.bundleID) else {
+            store.message = Store.Message(text: "Quit \(trace.browser) first, then clear its \(trace.kind.lowercased()).", failed: true)
+            return
+        }
+        let effect = switch trace.kind {
+        case BrowserPrivacy.cookies: "You will be signed out of websites in \(trace.browser)."
+        case BrowserPrivacy.history: "\(trace.browser) forgets the pages you visited; bookmarks and passwords stay."
+        default: "\(trace.browser) downloads pages again as you visit them."
+        }
+        guard Alerts.confirm("Clear \(trace.browser)'s \(trace.kind.lowercased())?",
+                             "This deletes \(trace.paths.count) items, \(Store.bytes(trace.size)).\n\n" + effect,
+                             button: "Clear") else { return }
+        store.busy = "Clearing \(trace.browser) \(trace.kind.lowercased())"
+        defer { store.busy = nil }
+        let stuck = await Task.detached { BrowserPrivacy.clear(trace) }.value
+        await loadBrowserTraces()
+        let left = browserTraces?.first { $0.id == trace.id }?.size ?? 0
+        store.record(.privacy, "\(trace.browser) \(trace.kind)", freed: max(trace.size - left, 0))
+        monitor.readDisk()
+        store.message = Store.Message(text: "\(trace.browser) \(trace.kind.lowercased()) cleared" + (stuck > 0 ? "; \(stuck) items stayed." : "."),
+                                      failed: stuck > 0)
     }
 
     /// What runs with the session, as Background Task Management keeps it.
