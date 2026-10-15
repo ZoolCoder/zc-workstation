@@ -188,7 +188,33 @@ zc-workstation/
 |CI on macOS, Linux and Windows runners
 |Done
 |`ci.yml` tests the CLI on Linux, macOS and Windows runners, and builds and tests ZCBar on macOS.
+
+|The toolbox
+|Done
+|A manual page per tool in the reference setup: what it is for, how it is configured, its keys. See xref:toolbox/index.adoc[].
+
+|Repository hardening
+|Ready to apply
+|Git flow with `develop`, rulesets for `main`, `develop` and `v*` tags, pinned actions, CodeQL and govulncheck. `scripts/harden.sh` applies the GitHub settings.
+
+|First release, `v0.1.0`
+|Next
+|Binaries, the Homebrew cask, Linux packages and Windows zips through goreleaser.
 |===
+
+== Next
+
+The concrete tasks are in
+https://github.com/ZoolCoder/zc-workstation/blob/develop/TODO.md[TODO.md]. In
+order:
+
+. *Release.* Apply the repository settings, cut `v0.1.0`, and run
+  `bootstrap.sh` from the cask on a clean macOS VM.
+. *ZC Care.* Similar Images in My Clutter, and browser privacy data in
+  Protection.
+. *ZCBar distribution.* A Developer ID signature and notarisation, so Full
+  Disk Access survives an update, and a cask for the app.
+. *Linux and Windows.* Phases 2 and 3 below.
 
 == Phases
 

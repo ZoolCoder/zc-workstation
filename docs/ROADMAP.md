@@ -1,7 +1,8 @@
 # Roadmap
 
 The full plan, with the decisions and the projects reused from GitHub, is in
-[docs/modules/ROOT/pages/roadmap.adoc](modules/ROOT/pages/roadmap.adoc).
+[docs/modules/ROOT/pages/roadmap.adoc](modules/ROOT/pages/roadmap.adoc). The
+concrete next tasks are in [TODO.md](../TODO.md).
 
 ## Done
 
@@ -15,12 +16,27 @@ The full plan, with the decisions and the projects reused from GitHub, is in
 - `list`, `capture`, `add`, `remove`, `-upgrade` and `-only`.
 - ZCBar, the menu bar app, and ZC Care, its window that cleans, protects and
   tunes the Mac.
+- The MCP server and the Claude Code plugin, with adapters for other agents.
+- The toolbox section of the manual: a page per tool in the reference setup.
+
+## Now: the first release
+
+- Apply the repository settings and rulesets (`scripts/harden.sh`).
+- `v0.1.0`: binaries, the Homebrew cask, Linux packages and Windows zips.
+- A clean-machine run of `bootstrap.sh` on a macOS VM.
 
 ## Next
 
 - ZC Care: Similar Images in My Clutter, and browser privacy data.
-- Phase 2, Linux: Ubuntu LTS and Fedora.
-- Phase 3, native Windows: winget, PowerShell, WezTerm, PowerToys.
+- ZCBar signed with a Developer ID and notarised, and shipped as a cask.
+- Phase 2, Linux: systemd timers, gsettings and keyd, tested on Ubuntu LTS
+  and Fedora.
+- Phase 3, native Windows: registry settings, Task Scheduler, PowerShell,
+  WezTerm.
+
+## Later
+
+- Per-system getting started pages and a generated command reference.
 - Phase 4: retire aurora-mac.
 
 ## Not planned

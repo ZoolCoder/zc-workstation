@@ -1,5 +1,87 @@
 # Contributing
 
+Thanks for helping. This guide takes you from a clone to a merged pull
+request. Questions go to [SUPPORT.md](SUPPORT.md); security problems go to
+[SECURITY.md](SECURITY.md), never to a public issue.
+
+## Where to start
+
+- **Something broke?** Open a [bug report](https://github.com/ZoolCoder/zc-workstation/issues/new?template=bug_report.yml)
+  with the output of `zc-workstation doctor` and the plan it printed.
+- **An idea?** Open a [feature request](https://github.com/ZoolCoder/zc-workstation/issues/new?template=feature_request.yml)
+  before writing code, so we agree on the shape first.
+- **Want to code?** [TODO.md](TODO.md) lists open work. Items marked
+  *good first change* need no knowledge of the engine. The
+  [roadmap](docs/ROADMAP.md) has the bigger picture.
+
+## Set up
+
+You need Go (the version in `go.mod`), `make` and git. For the menu bar app,
+also Xcode or the Swift toolchain on macOS 14 or later. For the manual,
+Node.
+
+```console
+$ gh repo fork ZoolCoder/zc-workstation --clone
+$ cd zc-workstation
+$ git switch develop
+$ make lint test build
+```
+
+`bin/zc-workstation` is your build. Try it against the example config, which
+changes nothing until you apply:
+
+```console
+$ bin/zc-workstation validate -config zc-workstation.example.yaml
+$ bin/zc-workstation plan -config zc-workstation.example.yaml
+```
+
+## Make a change
+
+The project follows git flow. Open your pull request against `develop`:
+
+```console
+$ git switch -c feature/<topic> develop
+# edit, then:
+$ make lint test
+$ git commit -m "feat(packages): plan dnf upgrades"
+$ git fetch origin && git rebase origin/develop
+$ git push -u origin feature/<topic>
+$ gh pr create --base develop
+```
+
+Use `fix/`, `docs/` or `chore/` instead of `feature/` when that fits better.
+CI must be green before the merge. The pull request template lists what the
+review checks; tick what applies.
+
+### Branches
+
+| Branch | From | Merges into | Holds |
+|---|---|---|---|
+| `main` | | | released code only; every merge is a tag `vX.Y.Z` |
+| `develop` | `main` | | the next release; the default branch; open pull requests here |
+| `feature/<topic>` | `develop` | `develop` | one change; `fix/`, `docs/`, `chore/` work the same |
+| `release/<X.Y.Z>` | `develop` | `main`, then `develop` | version bump and changelog only |
+| `hotfix/<X.Y.Z>` | `main` | `main`, then `develop` | an urgent fix to a release |
+
+`main` and `develop` change only through pull requests with green CI, and
+neither can be force-pushed or deleted. CI refuses a pull request into `main`
+that does not come from a `release/` or `hotfix/` branch.
+
+Rebase a topic branch on `develop` rather than merging `develop` into it.
+Topic branches are rebased into `develop`. Release and hotfix branches are
+merged into `main` with a merge commit, so each release is one visible merge.
+
+### Commits
+
+Conventional commits: `type(scope): description`, imperative, lowercase, no
+trailing period, under 60 characters. Types: `feat`, `fix`, `refactor`,
+`docs`, `test`, `chore`, `build`, `ci`, `perf`, `style`. The scope is the
+area: `packages`, `dotfiles`, `engine`, `mcp`, `app`, `docs`.
+
+One change per commit, with a body saying what was wrong and why the fix is
+the right one. If a test found the bug, say so; that is the useful part for
+whoever reads it next.
+
 ## Running everything
 
 ```console
@@ -15,6 +97,9 @@ No test touches a network. A pull request from a fork must be testable
 without being handed access to anything, so CI runs with no credentials.
 A provider that talks to an API is tested against an `httptest.Server` that
 answers in that API's real shapes.
+
+CI runs the CLI tests on Linux, macOS and Windows, and builds and tests ZCBar
+on macOS. A change that only works on your system will show up there.
 
 ## What a good change looks like
 
@@ -34,6 +119,13 @@ finished one.
 that accepts every write and changes nothing, a saved plan applied after the
 world moved, a symlink that points out of the target. Successes tend to hold on
 their own.
+
+**Keep planning pure.** `Plan` reads and never writes; every write sits inside
+an action's `Do`. Config a provider cannot honour is rejected in
+`config.Validate`, not ignored.
+
+**No new dependency without a reason.** The standard library first. A pull
+request that adds a module says why nothing smaller would do.
 
 ## Adding a provider
 
@@ -62,9 +154,14 @@ will remove. A test proves it leaves alone what it must keep, such as a
 running Claude Code version or an AI tool's chats. `zcbar://` URLs open the
 installed app, so test them after `make app-install`.
 
+Screenshots in a README or the manual show no personal data: no real names,
+client folders, hostnames or device names.
+
+See [apps/menubar/README.md](apps/menubar/README.md) for how the app works.
+
 ## Docs
 
-The manual is Antora:
+The manual is Antora, in `docs/modules/ROOT`:
 
 ```console
 make docs && open build/site/index.html
@@ -74,34 +171,21 @@ It builds on the [zc-supplemental-ui](https://github.com/zoolcoder/zc-supplement
 theme release named in `package.json`; `npm run docs:local` builds against a
 checkout of the theme next to this repository instead.
 
-It must build with no warnings. `${VAR}` in prose is an attribute reference —
-wrap it in `+…+` or it renders as nothing.
+It must build with no warnings. `${VAR}` in prose is an attribute reference;
+wrap it in `+…+` or it renders as nothing. A new page also needs a line in
+`nav.adoc`.
 
-## Branches
+A change to a command, a flag or a JSON shape updates `commands.adoc` and
+`adapters/cloud/AGENTS.md` in the same pull request. A tool added to the
+reference setup gets a page under `pages/toolbox/`.
 
-The project follows git flow:
+## Releases
 
-| Branch | From | Merges into | Holds |
-|---|---|---|---|
-| `main` | | | released code only; every commit is a tag `vX.Y.Z` |
-| `develop` | `main` | | the next release; open pull requests here |
-| `feature/<topic>` | `develop` | `develop` | one change; `fix/`, `docs/`, `chore/` work the same |
-| `release/<X.Y.Z>` | `develop` | `main`, then `develop` | version bump and changelog only |
-| `hotfix/<X.Y.Z>` | `main` | `main`, then `develop` | an urgent fix to a release |
+Only the maintainer releases; see [GOVERNANCE.md](GOVERNANCE.md#releases).
+In short: a `release/X.Y.Z` branch from `develop` moves the *Unreleased*
+section of `CHANGELOG.md` under the version, merges into `main`, and the
+`vX.Y.Z` tag on `main` starts the release workflow.
 
-`main` and `develop` take changes only through pull requests with green CI, and
-neither can be force-pushed or deleted.
+## Conduct
 
-Rebase a topic branch on `develop` rather than merging `develop` into it.
-Topic branches are rebased into `develop`; release and hotfix branches are
-merged into `main` with a merge commit, so each release is one visible merge.
-
-## Commits
-
-Conventional commits: `type(scope): description`, imperative, lowercase, no
-trailing period, under 60 characters. Types: `feat`, `fix`, `refactor`, `docs`,
-`test`, `chore`, `build`, `ci`, `perf`, `style`.
-
-One change per commit, with a body saying what was wrong and why the fix is
-the right one. If a test found the bug, say so — that is the useful part for
-whoever reads it next.
+Everyone taking part follows the [code of conduct](CODE_OF_CONDUCT.md).

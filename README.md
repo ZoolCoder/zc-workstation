@@ -52,12 +52,13 @@ applied and verified
 - [Everyday workflows](#everyday-workflows)
 - [Dashboard](#dashboard)
 - [ZCBar and ZC Care, the menu bar app](#zcbar-and-zc-care-the-menu-bar-app)
+- [The toolbox](#the-toolbox)
 - [AI agents](#ai-agents)
 - [Safety](#safety)
 - [How it compares](#how-it-compares)
 - [Project layout](#project-layout)
-- [Status](#status)
-- [Develop](#develop)
+- [Status and roadmap](#status-and-roadmap)
+- [Contributing](#contributing)
 
 ## Why
 
@@ -439,7 +440,28 @@ or the caches of open apps.
 $ make app-install    # builds and installs ~/Applications/ZCBar.app (macOS 14+)
 ```
 
-More is in the manual's [Menu bar app and ZC Care](https://zoolcoder.github.io/zc-workstation/zc-workstation/app.html) page.
+More is in [apps/menubar/README.md](apps/menubar/README.md) and the manual's
+[Menu bar app and ZC Care](https://zoolcoder.github.io/zc-workstation/zc-workstation/app.html) page.
+
+## The toolbox
+
+zc-workstation was built to run one developer's Mac, and the manual
+describes that setup tool by tool: what each is for, how it is configured,
+and the keys worth knowing. Take what you like into your own Brewfile.
+
+| Area | Tools |
+|---|---|
+| Terminal and shell | [Ghostty](https://zoolcoder.github.io/zc-workstation/zc-workstation/toolbox/ghostty.html), [tmux](https://zoolcoder.github.io/zc-workstation/zc-workstation/toolbox/tmux.html) with a `dev` layout, zsh with antidote, Starship, Atuin |
+| Command line | fzf, zoxide, eza, bat, fd, ripgrep, Yazi |
+| Git | lazygit, delta, difftastic, git-absorb, gitleaks before every commit, gh |
+| Runtimes and dotfiles | mise, chezmoi, direnv |
+| Containers and data | Colima and Docker, lazydocker, k9s, PostgreSQL 17, pgcli, TablePlus |
+| Desktop | SketchyBar and JankyBorders, Karabiner with a Hyper key, Raycast, Chrome |
+| Editors | VS Code, IntelliJ IDEA, Neovim |
+| AI | Claude Code in a Ghostty split or a tmux pane, Codex, CodexBar, Ollama |
+
+The colours, prompt, terminal and bar themes are in [`assets/theme`](assets/theme).
+Start at [The toolbox](https://zoolcoder.github.io/zc-workstation/zc-workstation/toolbox/index.html).
 
 ## AI agents
 
@@ -524,7 +546,7 @@ docs/                 the Antora manual
 bootstrap.sh          a new Mac in one command
 ```
 
-## Status
+## Status and roadmap
 
 | Platform | State |
 |---|---|
@@ -532,9 +554,12 @@ bootstrap.sh          a new Mac in one command
 | Linux | Supported: apt and dnf packages, dotfiles, runtimes. Next: systemd timers, gsettings. |
 | Windows | Supported: winget, dotfiles, runtimes. Next: registry settings, Task Scheduler. |
 
-See the [roadmap](docs/ROADMAP.md) and the [changelog](CHANGELOG.md).
+Next up is the first release, `v0.1.0`. After it come Similar Images in
+ZC Care, a notarised ZCBar, and the Linux and Windows phases. See the
+[roadmap](docs/ROADMAP.md), the concrete tasks in [TODO.md](TODO.md), and
+the [changelog](CHANGELOG.md).
 
-## Develop
+## Contributing
 
 ```console
 $ make lint test build    # the CLI: gofmt, vet, golangci-lint, tests, bin/zc-workstation
@@ -543,9 +568,14 @@ $ make docs               # the manual, which must build with no warnings
 ```
 
 Tests never touch the network, and CI runs them on Linux, macOS and
-Windows. To add a provider, see
-[Adding a provider](https://zoolcoder.github.io/zc-workstation/zc-workstation/extending.html).
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the rest.
+Windows. The project follows git flow: branch from `develop` and open your
+pull request against it.
+
+- [CONTRIBUTING.md](CONTRIBUTING.md): set up, branches, commits, what a good
+  change looks like.
+- [TODO.md](TODO.md): open work, with *good first change* items.
+- [Adding a provider](https://zoolcoder.github.io/zc-workstation/zc-workstation/extending.html).
+- [GOVERNANCE.md](GOVERNANCE.md): who decides, and how releases work.
 
 Questions go to [SUPPORT.md](SUPPORT.md). Security reports go to
 [SECURITY.md](SECURITY.md), never to a public issue.
