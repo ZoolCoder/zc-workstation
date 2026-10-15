@@ -18,9 +18,23 @@ struct ZCBarApp: App {
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     let store = Store()
+    private lazy var window = PanelWindow(store: store)
 
+    /// SwiftUI takes URL events for itself, so the handler replaces its own
+    /// once launched: zcbar://panel, from SketchyBar's item, toggles the
+    /// floating panel.
     func applicationDidFinishLaunching(_ notification: Notification) {
+        NSAppleEventManager.shared().setEventHandler(self, andSelector: #selector(open(_:reply:)),
+                                                     forEventClass: AEEventClass(kInternetEventClass),
+                                                     andEventID: AEEventID(kAEGetURL))
         Task { await store.start() }
+    }
+
+    @objc private func open(_ event: NSAppleEventDescriptor, reply: NSAppleEventDescriptor) {
+        let url = event.paramDescriptor(forKeyword: keyDirectObject)?.stringValue.flatMap(URL.init(string:))
+        if url?.host() == "panel" {
+            window.toggle()
+        }
     }
 
     func applicationWillTerminate(_ notification: Notification) {

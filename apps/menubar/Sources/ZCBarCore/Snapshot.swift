@@ -19,13 +19,15 @@ public struct Snapshot: Sendable, Equatable {
 
     public var visibleTargets: [TargetStatus] { targets.filter { !$0.isSkipped } }
 
-    /// The findings the owner has not chosen to ignore.
+    /// The findings the owner has not chosen to ignore. A target's own check
+    /// repeats its coverage bar, so it is left out.
     public func findings(ignoring ignored: Set<String>) -> [Check] {
-        findings.filter { !ignored.contains($0.name) }
+        findings.filter { !ignored.contains($0.name) && !$0.name.hasPrefix("target ") }
     }
 
-    /// The number on the menu bar icon: missing things, updates, findings.
+    /// The number on the icon: missing things, findings, and one for all
+    /// pending updates, which would otherwise drown the rest.
     public func attention(ignoring ignored: Set<String>) -> Int {
-        targets.map(\.gaps).reduce(0, +) + outdated.count + findings(ignoring: ignored).count + errors.count
+        targets.map(\.gaps).reduce(0, +) + (outdated.isEmpty ? 0 : 1) + findings(ignoring: ignored).count + errors.count
     }
 }

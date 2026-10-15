@@ -100,13 +100,17 @@ public struct Workstation: Sendable {
 
     public func outdated() async throws -> [Item] {
         let groups: [ItemGroup] = try await json(["list", "-json", "-state", "outdated"])
-        return groups.flatMap { $0.items ?? [] }
+        return groups.flatMap { g in
+            (g.items ?? []).map { var i = $0; i.target = g.target; return i }
+        }
     }
 
     /// Plans and saves the plan to file, so apply runs what was shown.
-    public func plan(upgrade: Bool = false, only: [String] = [], savingTo file: String) async throws -> PlanDoc {
+    public func plan(upgrade: Bool = false, targets: [String] = [], only: [String] = [],
+                     savingTo file: String) async throws -> PlanDoc {
         var args = ["plan", "-json", "-out", file]
         if upgrade { args.append("-upgrade") }
+        for t in targets { args += ["-target", t] }
         for r in only { args += ["-only", r] }
         return try await json(args)
     }

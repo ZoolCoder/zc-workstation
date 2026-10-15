@@ -86,6 +86,8 @@ public struct Item: Decodable, Sendable, Equatable, Identifiable {
     public var version: String?
     public var latest: String?
     public var desc: String?
+    /// The target the item belongs to; list -json gives it per group.
+    public var target: String?
 
     public init(name: String, kind: String, state: String, version: String? = nil, latest: String? = nil) {
         self.name = name
@@ -95,8 +97,11 @@ public struct Item: Decodable, Sendable, Equatable, Identifiable {
         self.latest = latest
     }
 
-    /// The name a plan gives the item's change, for `-only`.
+    /// The name a plan gives the item's change, for `-only`. A runtime's
+    /// change is named for the version the config asks for, which list does
+    /// not give, so a runtime has none.
     public var resource: String { kind + ":" + name }
+    public var planResource: String? { kind == "runtime" ? nil : resource }
     public var id: String { resource }
 }
 

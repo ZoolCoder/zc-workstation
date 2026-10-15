@@ -8,7 +8,9 @@ import ZCBarCore
 /// the CLI; the app only reads its JSON and asks before it changes anything.
 @MainActor @Observable
 final class Store {
-    var snapshot: Snapshot?
+    var snapshot: Snapshot? {
+        didSet { publish() }
+    }
     var refreshedAt: Date?
     var refreshing = false
     /// What a running change is doing, such as "Updating tmux".
@@ -18,9 +20,14 @@ final class Store {
     /// The plan Plan last showed.
     var plan: PlanDoc?
     /// Why the CLI cannot run: no binary, or no config.
-    var setupProblem: String?
+    var setupProblem: String? {
+        didSet { publish() }
+    }
     var ignored: Set<String> {
-        didSet { UserDefaults.standard.set(Array(ignored).sorted(), forKey: Keys.ignored) }
+        didSet {
+            UserDefaults.standard.set(Array(ignored).sorted(), forKey: Keys.ignored)
+            publish()
+        }
     }
 
     struct Message: Equatable {
@@ -35,6 +42,7 @@ final class Store {
     }
 
     private var workstation: Workstation?
+    private var env: [String: String] = [:]
     private var dashboard: Process?
     private var ticker: Task<Void, Never>?
     private let planFile = FileManager.default.temporaryDirectory.appendingPathComponent("zcbar-plan.json").path
@@ -62,7 +70,7 @@ final class Store {
 
     /// Finds the CLI and the config, then reads the machine.
     func connect() async {
-        let env = await Discovery.loginEnvironment()
+        env = await Discovery.loginEnvironment()
         let home = NSHomeDirectory()
         guard let binary = Discovery.binary(env: env, home: home) else {
             setupProblem = "zc-workstation is not installed. Run make install in the zc-workstation repository."
@@ -105,10 +113,14 @@ final class Store {
 
     // MARK: Changes
 
-    /// Upgrades one package, which its Update button already asked for.
+    /// Upgrades one package, which its Update button already asked for. A
+    /// runtime cannot be picked out of a plan, so its whole target upgrades,
+    /// after a confirmation that lists what.
     func update(_ item: Item) async {
-        await change("Updating \(item.name)", confirm: false) {
-            try await $0.plan(upgrade: true, only: [item.resource], savingTo: self.planFile)
+        let only = item.planResource.map { [$0] } ?? []
+        let targets = only.isEmpty ? [item.target].compactMap { $0 } : []
+        await change("Updating \(item.name)", confirm: only.isEmpty) {
+            try await $0.plan(upgrade: true, targets: targets, only: only, savingTo: self.planFile)
         }
     }
 
@@ -233,6 +245,23 @@ final class Store {
     func stop() {
         ticker?.cancel()
         dashboard?.terminate()
+    }
+
+    // MARK: SketchyBar
+
+    /// Hands the count to SketchyBar's zcbar item, which reads it from a file
+    /// when the zcbar_changed event says it changed.
+    private func publish() {
+        let value = setupProblem != nil ? "setup" : snapshot.map { String($0.attention(ignoring: ignored)) }
+        guard let value else { return }
+        let dir = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support/ZCBar")
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        try? value.write(to: dir.appendingPathComponent("attention"), atomically: true, encoding: .utf8)
+        let dirs = (env["PATH"] ?? "").split(separator: ":").map(String.init) + ["/opt/homebrew/bin"]
+        guard let bar = dirs.map({ $0 + "/sketchybar" }).first(where: FileManager.default.isExecutableFile) else { return }
+        // sketchybar finds its server by $USER, so it gets the login environment.
+        let env = env
+        Task.detached { _ = try? await ProcessRunner().run(bar, ["--trigger", "zcbar_changed"], env: env) }
     }
 
     // MARK: Login item

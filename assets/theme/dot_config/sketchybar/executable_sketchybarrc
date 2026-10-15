@@ -26,6 +26,12 @@ sketchybar --add item clock right --set clock icon=󰃰 icon.color=$ACCENT updat
   --add item memory right --set memory icon=󰍛 icon.color=$PEACH update_freq=15 script="$PLUGIN_DIR/memory.sh" \
   --add item sensors right --set sensors icon=󰔏 icon.color=$ACCENT update_freq=10 script="$PLUGIN_DIR/sensors.sh"
 
+# What needs attention on this Mac, counted by the ZCBar app (apps/menubar); a
+# click opens its panel. Hidden while the app has never run.
+sketchybar --add event zcbar_changed \
+  --add item zcbar right --set zcbar icon=󰌢 script="$PLUGIN_DIR/zcbar.sh" click_script="open -g zcbar://panel" \
+  --subscribe zcbar zcbar_changed system_woke
+
 # macOS posts this notification on every switch between light and dark mode.
 sketchybar --add event theme_changed AppleInterfaceThemeChangedNotification \
   --add item theme left --set theme drawing=off script="$PLUGIN_DIR/theme.sh" --subscribe theme theme_changed

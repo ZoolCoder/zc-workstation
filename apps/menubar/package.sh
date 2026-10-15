@@ -27,6 +27,13 @@ cat >"$out/Contents/Info.plist" <<PLIST
     <key>CFBundleVersion</key><string>${version}</string>
     <key>LSMinimumSystemVersion</key><string>14.0</string>
     <key>LSUIElement</key><true/>
+    <key>CFBundleURLTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleURLName</key><string>dev.zoolcoder.zcbar</string>
+            <key>CFBundleURLSchemes</key><array><string>zcbar</string></array>
+        </dict>
+    </array>
     <key>NSHumanReadableCopyright</key><string>ZoolCoder</string>
 </dict>
 </plist>

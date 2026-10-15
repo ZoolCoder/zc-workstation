@@ -21,13 +21,16 @@ func ok(_ json: String) -> CommandResult { CommandResult(status: 0, stdout: Data
          {"target":"home","provider":"dotfiles","summary":"","in_place":36,"declared":36}]
         """),
         "list": ok("""
-        [{"target":"packages","provider":"packages","items":[{"name":"tmux","kind":"brew","state":"outdated","version":"3.7c","latest":"3.8"}]}]
+        [{"target":"packages","provider":"packages","items":[{"name":"tmux","kind":"brew","state":"outdated","version":"3.7c","latest":"3.8"},
+          {"name":"git","kind":"brew","state":"outdated"}]},
+         {"target":"runtimes","provider":"tools","items":[{"name":"node","kind":"runtime","state":"outdated"}]}]
         """),
         // The doctor exits 1 when a check fails; its report still counts.
         "doctor": CommandResult(status: 1, stdout: Data("""
         {"schemaVersion":1,"checks":[{"name":"binary","status":"ok"},
          {"name":"security firewall","status":"warn","detail":"sudo /usr/libexec/ApplicationFirewall/socketfilterfw --setglobalstate on"},
-         {"name":"security servers on every network interface","status":"warn","detail":"limactl:53"}]}
+         {"name":"security servers on every network interface","status":"warn","detail":"limactl:53"},
+         {"name":"target packages","status":"warn","detail":"123 of 124 packages installed"}]}
         """.utf8)),
     ])
     let ws = Workstation(binary: "/zc", config: "/c.yaml", env: [:], runner: fake)
@@ -35,8 +38,11 @@ func ok(_ json: String) -> CommandResult { CommandResult(status: 0, stdout: Data
 
     #expect(s.errors.isEmpty)
     #expect(s.visibleTargets.map(\.target) == ["packages", "home"])
-    #expect(s.outdated.map(\.resource) == ["brew:tmux"])
-    #expect(s.findings.map(\.title) == ["Firewall", "Servers on every network interface"])
+    #expect(s.outdated.map(\.resource) == ["brew:tmux", "brew:git", "runtime:node"])
+    #expect(s.outdated.map(\.planResource) == ["brew:tmux", "brew:git", nil])
+    #expect(s.outdated.last?.target == "runtimes")
+    #expect(s.findings(ignoring: []).map(\.title) == ["Firewall", "Servers on every network interface"])
+    // One gap, one for all updates, two findings.
     #expect(s.attention(ignoring: []) == 4)
     #expect(s.attention(ignoring: ["security servers on every network interface"]) == 3)
 }

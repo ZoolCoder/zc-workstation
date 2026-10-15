@@ -1,0 +1,83 @@
+import AppKit
+import SwiftUI
+
+/// The panel in a floating window, for a bar that hides the macOS menu bar:
+/// SketchyBar's item opens zcbar://panel, and the panel drops down under the
+/// click, like the menu bar one.
+@MainActor
+final class PanelWindow: NSObject, NSWindowDelegate {
+    private let store: Store
+    private var panel: NSPanel?
+    /// Where the panel's top edge stays while its content grows and shrinks.
+    private var top: CGFloat = 0
+    /// When a click elsewhere last closed the panel: a click on the bar item
+    /// closes it that way first, and must not open it again.
+    private var closedAt = Date.distantPast
+
+    init(store: Store) {
+        self.store = store
+    }
+
+    func toggle() {
+        if let panel, panel.isVisible {
+            panel.orderOut(nil)
+        } else if Date.now.timeIntervalSince(closedAt) > 0.4 {
+            show()
+        }
+    }
+
+    private func show() {
+        let panel = self.panel ?? make()
+        self.panel = panel
+        let mouse = NSEvent.mouseLocation
+        let screen = NSScreen.screens.first { $0.frame.contains(mouse) } ?? NSScreen.main
+        guard let frame = screen?.frame else { return }
+        // SwiftUI sizes the view only once it has laid it out.
+        panel.contentView?.layoutSubtreeIfNeeded()
+        var size = panel.contentView?.fittingSize ?? .zero
+        if size.width < 100 || size.height < 100 { size = NSSize(width: 380, height: 480) }
+        // Under the bar: SketchyBar is 36 points high, 2 down from the top.
+        let x = min(max(mouse.x - size.width / 2, frame.minX + 8), frame.maxX - size.width - 8)
+        top = frame.maxY - 46
+        panel.setFrame(NSRect(x: x, y: top - size.height, width: size.width, height: size.height), display: true)
+        panel.makeKeyAndOrderFront(nil)
+        store.refreshIfStale()
+    }
+
+    private func make() -> NSPanel {
+        let panel = KeyPanel(contentRect: .zero, styleMask: [.nonactivatingPanel, .fullSizeContentView, .borderless],
+                             backing: .buffered, defer: true)
+        panel.isFloatingPanel = true
+        panel.level = .statusBar
+        panel.backgroundColor = .clear
+        panel.isOpaque = false
+        panel.hasShadow = true
+        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        panel.delegate = self
+        let root = PanelView(store: store)
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+        let host = NSHostingView(rootView: root)
+        host.sizingOptions = [.preferredContentSize]
+        panel.contentView = host
+        return panel
+    }
+
+    func windowDidResize(_ notification: Notification) {
+        guard let panel, panel.frame.maxY != top else { return }
+        panel.setFrameOrigin(NSPoint(x: panel.frame.minX, y: top - panel.frame.height))
+    }
+
+    /// Clicking elsewhere closes the panel, but not an alert the panel asked.
+    func windowDidResignKey(_ notification: Notification) {
+        guard NSApp.modalWindow == nil, store.busy == nil else { return }
+        panel?.orderOut(nil)
+        closedAt = .now
+    }
+}
+
+/// A borderless panel takes key only when it says it can, which its buttons
+/// and the config chooser need.
+private final class KeyPanel: NSPanel {
+    override var canBecomeKey: Bool { true }
+}
