@@ -11,6 +11,8 @@ The config is read again on every request, so an edit shows on reload.
 
 == This machine
 
+image::dashboard.png[The dashboard's front page on a Linux machine with three targets]
+
 The front page reads every target and shows:
 
 * *Next step*: targets that cannot be read, else the number of items still to
