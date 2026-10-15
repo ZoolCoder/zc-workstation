@@ -6,6 +6,36 @@ here with what to edit.
 
 ## Unreleased
 
+### Watch, history and upgrade
+
+- `upgrade` saves what is outdated, then upgrades it, so `review` can say
+  what moved.
+- `history` lists every apply, from the terminal, the dashboard or an agent,
+  and each change in drift.
+- `drift` counts what differs from the config and saves it; `drift -plist`
+  prints a launchd agent that checks every morning. ZCBar, SketchyBar and
+  the dashboard show the count.
+- The dashboard shows the drift watch and recent activity.
+- The manual's command reference is the usage text, checked by a test.
+
+### AI agents
+
+- The `agents` provider writes MCP servers, a rules file and skills into
+  Claude Code, Codex, Cursor and Gemini CLI, and pulls Ollama models.
+- `doctor` warns about plain-text keys in MCP configs, MCP servers run at
+  `@latest`, and Claude Code rules that allow every shell command.
+- The MCP server annotates its tools, serves the config, history and
+  manifests as resources, refuses plans older than an hour, and logs every
+  call to `mcp-audit.jsonl`. New tools: `history` and `drift`.
+
+### Hardening
+
+- `doctor` checks SSH keys without a passphrase, commit signing, secrets in
+  the shell history (through gitleaks, redacted), Remote Login, Screen
+  Sharing, automatic login and AirDrop.
+- Releases are signed with cosign, carry an SBOM and SLSA build provenance;
+  the security page says how to verify one.
+
 ### ZCBar and ZC Care
 
 - ZCBar, a macOS menu bar app over the CLI, with an app icon and a ⌃⌥Z
