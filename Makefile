@@ -6,7 +6,7 @@ BIN := bin/zc-workstation
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null | sed 's/^v//')-dev
 LDFLAGS := -X main.version=$(VERSION)
 
-.PHONY: all build run ui test test-unit race cover lint fmt install evals docs docs-serve clean
+.PHONY: all build run ui test test-unit race cover lint fmt install app app-test app-install evals docs docs-serve clean
 
 all: lint test build
 
@@ -47,6 +47,24 @@ install: build
 	cp $(BIN) $(HOME)/.local/bin/zc-workstation.new
 	mv $(HOME)/.local/bin/zc-workstation.new $(HOME)/.local/bin/zc-workstation
 	@echo "installed $(VERSION) to ~/.local/bin/zc-workstation (add to PATH if needed)"
+
+# The menu bar app, apps/menubar: a SwiftPM package, macOS only.
+APP := bin/ZCBar.app
+
+app:
+	VERSION=$(VERSION) apps/menubar/package.sh $(APP)
+
+app-test:
+	swift test --package-path apps/menubar
+
+# A Finder-opened app gets no shell environment, so the config the shell
+# names is handed to it once; the app's Choose Config changes it later.
+app-install: app
+	rm -rf $(HOME)/Applications/ZCBar.app
+	mkdir -p $(HOME)/Applications
+	cp -R $(APP) $(HOME)/Applications/ZCBar.app
+	@if [ -n "$$ZC_WORKSTATION_CONFIG" ]; then defaults write dev.zoolcoder.zcbar configPath "$$ZC_WORKSTATION_CONFIG"; fi
+	@echo "installed ~/Applications/ZCBar.app; open it once, then tick Open at login"
 
 evals: ## run the plugin eval suite (evals/), needs the claude CLI
 	claude plugin eval . --no-publish --threshold 0.8

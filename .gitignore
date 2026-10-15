@@ -1,4 +1,6 @@
 /bin/
+# SwiftPM build output, apps/menubar
+.build/
 /dist/
 .DS_Store
 coverage.out
