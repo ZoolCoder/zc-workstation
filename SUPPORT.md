@@ -5,7 +5,7 @@ questions get an answer and bugs get fixed.
 
 | You want to | Go to |
 |---|---|
-| Learn how something works | The [manual](https://zoolcoder.github.io/zc-workstation/), starting with [getting started](https://zoolcoder.github.io/zc-workstation/zc-workstation/getting-started.html) |
+| Learn how something works | The [manual](https://zoolcoder.github.io/zc-workstation/), starting with [getting started](https://zoolcoder.github.io/zc-workstation/getting-started.html) |
 | Report a bug or a skill that misbehaved | [New issue](https://github.com/ZoolCoder/zc-workstation/issues/new/choose), with `zc-workstation doctor` output |
 | Ask for a provider or a feature | [Feature request](https://github.com/ZoolCoder/zc-workstation/issues/new/choose) |
 | Report a security problem | [SECURITY.md](SECURITY.md), never a public issue |

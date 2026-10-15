@@ -26,7 +26,7 @@ site:
   title: zc-workstation
   # Required for canonical URLs, og:url and sitemap generation.
   url: https://zoolcoder.github.io/zc-workstation
-  start_page: zc-workstation::index.adoc
+  start_page: ROOT::index.adoc
   robots: allow
 
 content:
@@ -40,7 +40,7 @@ ui:
   bundle:
     # The ZoolCoder docs UI, the same design as the admin page. Pinned to a
     # release so a change to the bundle reaches this site only by a bump here.
-    url: https://github.com/zoolcoder/zc-supplemental-ui/releases/download/v0.2.1/ui-bundle.zip
+    url: https://github.com/zoolcoder/zc-supplemental-ui/releases/download/v0.3.0/ui-bundle.zip
 
 asciidoc:
   extensions:
@@ -54,7 +54,7 @@ asciidoc:
     source-highlighter: highlight.js
     # Read by the UI bundle: header buttons, footer and link previews.
     page-zc-repo: https://github.com/zoolcoder/zc-workstation
-    page-zc-pdf: zc-workstation/_exports/index.pdf
+    page-zc-pdf: _exports/index.pdf
     page-zc-tagline: Documentation
     page-zc-site: https://zoolcoder.com/
     page-zc-site-name: zoolcoder.com
