@@ -41,6 +41,27 @@ See [Adding a provider](docs/modules/ROOT/pages/extending.adoc): a package
 under `internal/provider/`, a name in `config.Providers`, an entry in
 `engine.Default`, and a depguard line in `.golangci.yml`.
 
+## The menu bar app
+
+ZCBar lives in `apps/menubar`, a Swift package for macOS 14 and later. It
+needs Xcode or the Swift toolchain, so it builds only on a Mac:
+
+```console
+make app-test      # swift test: the ZCBarCore tests
+make app           # bin/ZCBar.app, signed ad hoc
+make app-install   # copy it to ~/Applications
+make app-icon      # redraw the icons from apps/menubar/icon/mark.svg
+```
+
+Logic goes in `ZCBarCore`, which has no UI and is what the tests cover. The
+`ZCBar` target holds only SwiftUI and AppKit. The app runs the CLI for
+anything that changes the workstation, so the CLI's checks apply to it too.
+
+A ZC Care change that deletes or trashes files asks first. It names what it
+will remove. A test proves it leaves alone what it must keep, such as a
+running Claude Code version or an AI tool's chats. `zcbar://` URLs open the
+installed app, so test them after `make app-install`.
+
 ## Docs
 
 The manual is Antora:

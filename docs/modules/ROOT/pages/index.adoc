@@ -33,6 +33,18 @@ CREATE  runtimes  java@temurin-25        install with mise
 | A mise config file
 | `mise install`
 
+| xref:providers.adoc#desktop[`desktop`]
+| A wallpaper and a screen saver page
+| `osascript`, WebViewScreenSaver
+
+| xref:providers.adoc#settings[`settings`]
+| macOS preferences
+| `defaults`
+
+| xref:providers.adoc#services[`services`]
+| Homebrew services and launchd agents
+| `brew services`, `launchctl`
+
 | xref:providers.adoc#localdir[`localdir`]
 | Files written inline in the config
 | Direct writes inside one directory
@@ -71,8 +83,18 @@ A target for another system is skipped, and shown as skipped.
 . *MANUAL* is what no tool should do for you, such as installing the package
   manager itself or trusting a mise config. The plan says what to run.
 
-== Four surfaces, one contract
+== Five surfaces, one contract
 
 The CLI is the contract. The xref:ui.adoc[dashboard], the
-xref:agents.adoc[MCP server], the agent skills and scripts all go through the
-same plan and apply, with the same refusals.
+xref:app.adoc[menu bar app], the xref:agents.adoc[MCP server], the agent
+skills and scripts all go through the same plan and apply, with the same
+refusals.
+
+On a Mac, the menu bar app also has *ZC Care*, a window that cleans junk and
+what AI tools leave behind, uninstalls apps with their leftovers and finds
+what fills the disk.
+
+== A new Mac
+
+Keep the config in its own repo, and a new Mac needs one command. See
+xref:new-machine.adoc[].

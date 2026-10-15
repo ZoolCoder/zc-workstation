@@ -5,6 +5,7 @@
 * xref:providers.adoc[Providers]
 * xref:commands.adoc[Commands]
 * xref:ui.adoc[Dashboard]
+* xref:app.adoc[Menu bar app and ZC Care]
 * xref:agents.adoc[Agents and MCP]
 * xref:extending.adoc[Adding a provider]
 * xref:security.adoc[Threat model]

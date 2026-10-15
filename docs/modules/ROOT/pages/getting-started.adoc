@@ -45,6 +45,9 @@ PS> winget install --id jdx.mise --exact
 
 == Install zc-workstation
 
+The Homebrew cask, Linux packages and Windows zips come with each release.
+Before the first one, install with Go, or run `make install` in a clone.
+
 [tabs]
 ====
 Homebrew::

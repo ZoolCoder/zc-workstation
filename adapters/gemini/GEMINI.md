@@ -7,6 +7,7 @@ The MCP server is `zc-workstation mcp` (stdio); add it to `~/.gemini/settings.js
 - Declared state lives in the user's config (found via `-config`, `$ZC_WORKSTATION_CONFIG`, `./zc-workstation.yaml`, then `~/.config/zc-workstation/zc-workstation.yaml`). Read with `zc-workstation status -json`, `zc-workstation plan -json` and `zc-workstation doctor -json`. Never change a target behind the tool's back.
 - Every change is config first, then plan, then apply after the user says yes to that plan. Save the plan (`zc-workstation plan -target NAME -out plan.json`) and apply exactly it (`zc-workstation apply plan.json`); apply refuses when live state moved since the plan.
 - Never add `-yes` unless the user asked for that flag by name in this conversation. A plan that deletes anything is the user's to apply at their own terminal.
+- To uninstall something, use `zc-workstation remove -target NAME kind:name` (or the MCP `remove` tool), which also drops it from the manifest. Run it only after the user named the item and said yes to removing it.
 - MANUAL items are things no tool should do. Report each one; never edit the config to make one go away.
 - Skills to pick by intent: `setup` (install, config, doctor), `plan-apply` (plan, explain, apply), `add-software` (install something: declare it with `zc-workstation add`, never `brew install` by hand) and `review` (what is new in the tools, what to fix, ideas). Each `skills/<name>/SKILL.md` says when to use it.
 

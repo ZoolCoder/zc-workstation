@@ -173,9 +173,21 @@ zc-workstation/
 |Done
 |The git identity, hooks and signing key, app settings (VS Code, IntelliJ, Chrome, CodexBar), `gradle.properties`, git maintenance and Claude Notify are chezmoi `run_onchange_` scripts in the config repo; macOS defaults and background services are `settings` and `services` targets.
 
+|`add`, `remove`, `-upgrade` and `-only`
+|Done
+|`add` declares an item with why it is there. `remove` uninstalls and drops it from the manifest. `sudo` asks in a macOS dialog when there is no terminal.
+
+|`bootstrap.sh`, theme and `desktop` provider
+|Done on macOS
+|A new Mac in one command from the config repo. The ZoolCoder theme, wallpaper and screen saver.
+
+|ZCBar menu bar app and ZC Care
+|Done on macOS
+|The panel over the CLI, and a window that cleans junk and AI clutter, uninstalls apps, finds clutter and idle dependencies, and logs what it freed. Similar Images is still to come. See xref:app.adoc[].
+
 |CI on macOS, Linux and Windows runners
-|Configured
-|`ci.yml` tests on Linux, macOS and Windows runners. It first runs on the first push.
+|Done
+|`ci.yml` tests the CLI on Linux, macOS and Windows runners, and builds and tests ZCBar on macOS.
 |===
 
 == Phases
