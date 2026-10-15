@@ -1,7 +1,6 @@
 package sh
 
 import (
-	"io"
 	"os"
 	"path/filepath"
 )
@@ -18,8 +17,8 @@ exec /usr/bin/osascript \
 // terminal to prompt on, as under an AI agent or launchd, it points
 // SUDO_ASKPASS at the dialog; Homebrew then passes -A, and sudo uses the
 // dialog on its own once DISPLAY is set. Otherwise it is nil: inherit as is.
-func askpassEnv(stdin io.Reader) []string {
-	if os.Getenv("SUDO_ASKPASS") != "" || isTerminal(stdin) {
+func askpassEnv() []string {
+	if os.Getenv("SUDO_ASKPASS") != "" || hasTerminal() {
 		return nil
 	}
 	path, err := writeAskpass()
@@ -33,13 +32,14 @@ func askpassEnv(stdin io.Reader) []string {
 	return env
 }
 
-func isTerminal(r io.Reader) bool {
-	f, ok := r.(*os.File)
-	if !ok {
+// hasTerminal reports whether this process has a controlling terminal, the
+// same test sudo makes before it prompts.
+func hasTerminal() bool {
+	tty, err := os.Open("/dev/tty")
+	if err != nil {
 		return false
 	}
-	info, err := f.Stat()
-	return err == nil && info.Mode()&os.ModeCharDevice != 0
+	return tty.Close() == nil
 }
 
 func writeAskpass() (string, error) {

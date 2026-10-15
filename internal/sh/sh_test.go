@@ -42,12 +42,15 @@ func TestAskpassOnlyWithoutTerminal(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("XDG_CACHE_HOME", t.TempDir())
 	t.Setenv("SUDO_ASKPASS", "")
-	env := askpassEnv(strings.NewReader(""))
+	if hasTerminal() {
+		t.Skip("running in a terminal")
+	}
+	env := askpassEnv()
 	if !slices.ContainsFunc(env, func(v string) bool { return strings.HasPrefix(v, "SUDO_ASKPASS=/") }) {
 		t.Fatalf("no askpass in %v", env)
 	}
 	t.Setenv("SUDO_ASKPASS", "/bin/mine")
-	if env := askpassEnv(strings.NewReader("")); env != nil {
+	if env := askpassEnv(); env != nil {
 		t.Fatal("overrode the caller's SUDO_ASKPASS")
 	}
 }

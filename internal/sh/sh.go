@@ -49,7 +49,7 @@ func (Exec) Output(ctx context.Context, name string, args ...string) ([]byte, er
 func (e Exec) Run(ctx context.Context, name string, args ...string) error {
 	cmd := exec.CommandContext(ctx, name, args...)
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = e.Stdin, e.Stdout, e.Stderr
-	cmd.Env = askpassEnv(e.Stdin)
+	cmd.Env = askpassEnv()
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("%s: %w", Line(name, args...), err)
 	}
