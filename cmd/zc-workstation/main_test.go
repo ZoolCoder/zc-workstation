@@ -16,6 +16,23 @@ import (
 	"github.com/zoolcoder/zc-workstation/internal/manifest"
 )
 
+// TestMain points the state and data folders at a scratch folder, so no test
+// writes to the activity log or plans of the person running it.
+func TestMain(m *testing.M) {
+	dir, err := os.MkdirTemp("", "zc-workstation-test-")
+	if err != nil {
+		panic(err)
+	}
+	_ = os.Setenv("XDG_STATE_HOME", filepath.Join(dir, "state"))
+	_ = os.Setenv("XDG_DATA_HOME", filepath.Join(dir, "data"))
+	// doctor reads keys and agent configs from the home folder; tests must
+	// never see the real ones.
+	_ = os.Setenv("HOME", filepath.Join(dir, "home"))
+	code := m.Run()
+	_ = os.RemoveAll(dir)
+	os.Exit(code)
+}
+
 // fixture writes a config with one pruned target and returns its path and the
 // target directory.
 func fixture(t *testing.T) (cfg, dir string) {
@@ -131,8 +148,10 @@ func TestValidateDoctorVersionAndErrors(t *testing.T) {
 		Checks []struct{ Name, Status string }
 	}
 	jerr := json.Unmarshal([]byte(out[:strings.LastIndex(out, "}")+1]), &report)
-	// The security checks run on macOS only and read this machine, so they are not counted.
-	install := slices.DeleteFunc(report.Checks, func(c struct{ Name, Status string }) bool { return strings.HasPrefix(c.Name, "security ") })
+	// The security and AI checks read this machine, so they are not counted.
+	install := slices.DeleteFunc(report.Checks, func(c struct{ Name, Status string }) bool {
+		return strings.HasPrefix(c.Name, "security ") || strings.HasPrefix(c.Name, "ai ")
+	})
 	if jerr != nil || len(install) != 4 {
 		t.Fatalf("doctor: %v %v\n%s", err, jerr, out)
 	}

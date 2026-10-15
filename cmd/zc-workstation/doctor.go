@@ -61,15 +61,29 @@ func runDoctor(args []string, _ io.Reader, stdout, stderr io.Writer) error {
 	}
 	if runtime.GOOS == "darwin" {
 		for _, res := range security.New(sh.System()).Run(context.Background()) {
-			// A weak setting is the owner's call, not a broken install, so it warns.
-			if res.OK {
-				r.Add("security "+res.Name, doctor.OK, "")
-			} else {
-				r.Add("security "+res.Name, doctor.Warn, res.Detail)
-			}
+			addSecurity(r, "security ", res)
 		}
 	}
+	// Keys, commits, shell history and AI configs live in the home folder on
+	// every system, so these run everywhere.
+	user := security.NewUser(sh.System())
+	for _, res := range user.Account(context.Background()) {
+		addSecurity(r, "security ", res)
+	}
+	for _, res := range user.AI() {
+		addSecurity(r, "ai ", res)
+	}
 	return r.Write(stdout, *asJSON)
+}
+
+// addSecurity reports a check. A weak setting is the owner's call, not a
+// broken install, so it warns.
+func addSecurity(r *doctor.Report, prefix string, res security.Result) {
+	if res.OK {
+		r.Add(prefix+res.Name, doctor.OK, "")
+	} else {
+		r.Add(prefix+res.Name, doctor.Warn, res.Detail)
+	}
 }
 
 func writeJSON(w io.Writer, v any) error {

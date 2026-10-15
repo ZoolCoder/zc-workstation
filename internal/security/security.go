@@ -62,10 +62,26 @@ var checks = []check{
 	{"File Sharing off", "sudo launchctl disable system/com.apple.smbd",
 		[]string{"netstat", "-an", "-p", "tcp"},
 		func(out string) bool { return !smb.MatchString(out) }},
+	{"Remote Login off", "System Settings, General, Sharing: turn Remote Login off, or limit it to your user",
+		[]string{"netstat", "-an", "-p", "tcp"},
+		func(out string) bool { return !sshd.MatchString(out) }},
+	{"Screen Sharing off", "System Settings, General, Sharing: turn Screen Sharing and Remote Management off",
+		[]string{"netstat", "-an", "-p", "tcp"},
+		func(out string) bool { return !vnc.MatchString(out) }},
+	// Each reads a key that is absent on a safe Mac, so the shell forgives
+	// the error and an empty answer passes.
+	{"automatic login off", "System Settings, Users & Groups: set Automatically log in as to Off",
+		[]string{"/bin/sh", "-c", "defaults read /Library/Preferences/com.apple.loginwindow autoLoginUser 2>/dev/null; true"},
+		func(out string) bool { return strings.TrimSpace(out) == "" }},
+	{"AirDrop not open to everyone", "Control Centre, AirDrop: Contacts Only",
+		[]string{"/bin/sh", "-c", "defaults read com.apple.sharingd DiscoverableMode 2>/dev/null; true"},
+		func(out string) bool { return !strings.Contains(out, "Everyone") }},
 }
 
 var (
-	smb = regexp.MustCompile(`[.:]445 .*LISTEN`)
+	smb  = regexp.MustCompile(`[.:]445 .*LISTEN`)
+	sshd = regexp.MustCompile(`[.:]22 .*LISTEN`)
+	vnc  = regexp.MustCompile(`[.:]5900 .*LISTEN`)
 	// touchID is the line sudo_local.template ships commented out.
 	touchID = regexp.MustCompile(`(?m)^auth\s+sufficient\s+pam_tid\.so`)
 )
