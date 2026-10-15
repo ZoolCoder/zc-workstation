@@ -59,6 +59,7 @@ disk clean. See xref:app.adoc[].
 |xref:toolbox/eza.adoc[eza] |eza, ls with icons, git status and trees.
 |xref:toolbox/bat.adoc[bat] |bat, cat with syntax highlighting and git changes; also the man page pager.
 |xref:toolbox/fd-ripgrep.adoc[fd and ripgrep] |fd and ripgrep, fast find and grep that respect .gitignore.
+|xref:toolbox/jq-yq.adoc[jq and yq] |jq and yq, query and edit JSON and YAML from the command line.
 |xref:toolbox/yazi.adoc[Yazi] |Yazi, a terminal file manager with previews.
 |===
 

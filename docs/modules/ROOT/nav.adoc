@@ -27,6 +27,7 @@
 ** xref:toolbox/eza.adoc[eza]
 ** xref:toolbox/bat.adoc[bat]
 ** xref:toolbox/fd-ripgrep.adoc[fd and ripgrep]
+** xref:toolbox/jq-yq.adoc[jq and yq]
 ** xref:toolbox/yazi.adoc[Yazi]
 * Git and GitHub
 ** xref:toolbox/git-tools.adoc[git and diff tools]
