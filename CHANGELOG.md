@@ -30,6 +30,8 @@ here with what to edit.
 
 ### Hardening
 
+- Releases ship ZCBar too: a universal app, attested, with a `zcbar` cask
+  in the tap (`brew install --cask zcbar`).
 - `doctor` checks SSH keys without a passphrase, commit signing, secrets in
   the shell history (through gitleaks, redacted), Remote Login, Screen
   Sharing, automatic login and AirDrop.

@@ -24,6 +24,16 @@ Nothing changes until you approve it.
 
 ## Install
 
+From the Homebrew tap, with the CLI it needs:
+
+```console
+$ brew tap zoolcoder/zc-workstation https://github.com/zoolcoder/zc-workstation
+$ brew install --cask zcbar
+```
+
+The release build is signed ad hoc, so open it the first time with
+Control-click, Open. To build it yourself instead:
+
 ZCBar needs macOS 14 or later, Xcode or the Swift toolchain, and the
 `zc-workstation` CLI. From the repository root:
 
