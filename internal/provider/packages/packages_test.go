@@ -75,7 +75,7 @@ func TestBrewPlanInstallsWhatIsMissing(t *testing.T) {
 		}
 	}
 	ran := strings.Join(r.Ran, "\n")
-	if ran != "brew tap hashicorp/tap\nbrew trust hashicorp/tap\nbrew install --cask --adopt ghostty\nmas install 6745342698" {
+	if ran != "brew tap hashicorp/tap\nbrew trust hashicorp/tap\nbrew install --cask --adopt ghostty\nsudo mas install 6745342698" {
 		t.Fatalf("ran\n%s", ran)
 	}
 }
@@ -348,7 +348,7 @@ func TestRemoveUninstallsAndDropsTheLine(t *testing.T) {
 	if err := p.Remove(context.Background(), tg, "mas", "409201541"); err != nil {
 		t.Fatal(err)
 	}
-	if want := "brew uninstall htop\nmas uninstall 361309726\nmas uninstall 409201541"; strings.Join(r.Ran, "\n") != want {
+	if want := "brew uninstall htop\nsudo mas uninstall 361309726\nsudo mas uninstall 409201541"; strings.Join(r.Ran, "\n") != want {
 		t.Fatalf("ran %q", r.Ran)
 	}
 	b, _ := os.ReadFile(tg.File)

@@ -56,7 +56,9 @@ var managers = map[string]manager{
 			case "cask":
 				return run(r, "brew", "install", "--cask", "--adopt", i.Name)
 			case "mas":
-				return run(r, "mas", "install", i.ID)
+				// mas runs sudo itself but drops SUDO_ASKPASS, so without a
+				// terminal it cannot ask; under our sudo the dialog works.
+				return run(r, "sudo", "mas", "install", i.ID)
 			}
 			return run(r, "brew", "install", i.Name)
 		},
@@ -67,7 +69,7 @@ var managers = map[string]manager{
 			case "cask":
 				return run(r, "brew", "uninstall", "--cask", i.Name)
 			case "mas":
-				return run(r, "mas", "uninstall", i.ID)
+				return run(r, "sudo", "mas", "uninstall", i.ID)
 			}
 			return run(r, "brew", "uninstall", i.Name)
 		},

@@ -18,7 +18,7 @@ from the manifest stays installed, because removing software is your call.
 | `brew`
 | A Brewfile: `tap`, `brew`, `cask` and `mas` entries
 | `brew list --formula`, `brew list --cask`, `brew tap`, `mas list`
-| `brew tap`, `brew install`, `brew install --cask --adopt`, `mas install ID`
+| `brew tap`, `brew install`, `brew install --cask --adopt`, `sudo mas install ID`
 
 | `apt`
 | One package per line, `#` comments
