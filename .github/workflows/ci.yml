@@ -87,6 +87,15 @@ jobs:
       - run: go vet ./...
       - run: go test -count=1 ./...
 
+  app:
+    # ZCBar, the menu bar app: its core tests, and the release build package.sh makes.
+    if: github.base_ref == 'main' || github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - run: make app-test
+      - run: make app
+
   lint:
     if: github.base_ref == 'main' || github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
