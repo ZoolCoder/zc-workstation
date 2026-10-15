@@ -12,7 +12,10 @@
 | `add ITEM` | Declare a package or runtime in one target's manifest, with why it is there. Installs nothing; `plan` and `apply` do.
 | `capture` | Print the manifest one target would declare to match this machine. Needs `-target`.
 | `validate` | Check the config offline.
-| `doctor` | Machine health: binary, system, config, the programs targets need, and each target. On macOS it also warns about weak security settings, each with its fix: FileVault, the firewall and stealth mode, the screen lock, Gatekeeper, SIP, automatic and security updates, File Sharing, Touch ID for sudo, and servers listening on every network interface.
+| `doctor` | Machine health: binary, system, config, the programs targets need, and each target. It also warns about weak security settings, keys without a passphrase, unsigned commits, secrets in the shell history and risky AI agent configs, each with its fix. xref:security.adoc#_what_doctor_checks[Every check].
+| `upgrade` | Save what is outdated to the state folder, then `apply -upgrade`. The review skill reads the snapshot to say what moved from what to what.
+| `history` | What was applied, newest first: when, which target, from the terminal, the dashboard or an agent, and whether it worked. Drift changes show here too.
+| `drift` | Plan, and save how many changes are outstanding to `~/.local/state/zc-workstation/drift.json`, which ZCBar and SketchyBar show. `-last` prints the saved one; `-plist` prints a launchd agent that runs it every morning.
 | `ui` | The xref:ui.adoc[dashboard].
 | `mcp` | The MCP server on standard input and output.
 | `version` | The version.
@@ -181,6 +184,22 @@ is left alone.
 A plan with a `DELETE` stops and asks you to type `yes`. Without a terminal,
 and without `-yes`, apply is cancelled. Agents never get `-yes`.
 
+== Drift watch
+
+`drift -plist` prints a launchd agent that runs `drift` at 9:00 (`-hour`
+moves it). Keep it in your dotfiles and loaded by a `services` target, like
+any other agent:
+
+[source,console]
+----
+$ zc-workstation drift -plist > Library/LaunchAgents/dev.zoolcoder.zc-workstation.drift.plist
+----
+
+The agent carries the `PATH` of the shell that printed it, since launchd
+starts agents with almost none. It only plans; nothing is applied. A change
+in the count is written to `history`, and SketchyBar's `drift` item shows the
+count while it is above zero.
+
 == Exit codes
 
 [cols="1,3"]
@@ -217,3 +236,9 @@ $ zc-workstation plan -json
   ]
 }
 ----
+
+== Reference
+
+The usage text, as `zc-workstation help` prints it:
+
+include::partial$usage.adoc[]
