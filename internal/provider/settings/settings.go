@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"maps"
 	"os"
-	"path/filepath"
+	"path"
 	"slices"
 	"strconv"
 	"strings"
@@ -67,10 +67,10 @@ func (p Provider) read(ctx context.Context, t config.Target) []key {
 }
 
 // expand turns a leading ~/ in a string value into the home directory, for
-// keys that hold a path.
+// keys that hold a path. defaults is macOS only, so the path uses slashes.
 func (p Provider) expand(v any) any {
 	if s, ok := v.(string); ok && strings.HasPrefix(s, "~/") {
-		return filepath.Join(p.home, s[2:])
+		return path.Join(p.home, s[2:])
 	}
 	return v
 }
