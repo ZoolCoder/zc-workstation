@@ -189,3 +189,14 @@ func ok(_ json: String) -> CommandResult { CommandResult(status: 0, stdout: Data
     #expect(try FileManager.default.contentsOfDirectory(atPath: dir.path) == ["Homebrew"])
     #expect(Junk.spots(home: "/h").allSatisfy { $0.path.hasPrefix("/h/") })
 }
+
+@Test func driftAndAIChecksAreRead() async {
+    let fake = FakeRunner(outputs: [
+        "drift": ok(#"{"at":"2026-10-16T07:00:00.123456Z","changes":3,"manual":0,"targets":{"packages":3}}"#),
+        "doctor": ok(#"{"checks":[{"name":"ai MCP servers pinned to a version","status":"warn","detail":"x"}]}"#),
+    ])
+    let s = await Workstation(binary: "/zc", config: "/c.yaml", env: [:], runner: fake).snapshot()
+    #expect(s.drift?.changes == 3)
+    #expect(s.drift?.targets?["packages"] == 3)
+    #expect(s.security.map(\.title) == ["AI: MCP servers pinned to a version"])
+}

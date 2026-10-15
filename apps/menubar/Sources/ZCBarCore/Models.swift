@@ -46,6 +46,15 @@ public struct TargetStatus: Decodable, Sendable, Equatable, Identifiable {
 }
 
 /// `doctor -json`.
+/// What the daily `zc-workstation drift` run found.
+public struct Drift: Decodable, Sendable, Equatable {
+    public var at: Date
+    public var changes: Int
+    public var manual: Int
+    public var targets: [String: Int]?
+    public var error: String?
+}
+
 public struct DoctorReport: Decodable, Sendable {
     public var checks: [Check]
 }
@@ -64,11 +73,13 @@ public struct Check: Decodable, Sendable, Equatable, Identifiable {
     }
 
     public var isOK: Bool { status == "ok" }
-    public var isSecurity: Bool { name.hasPrefix("security ") }
+    /// Security covers this Mac's settings and the AI agents' configs.
+    public var isSecurity: Bool { name.hasPrefix("security ") || name.hasPrefix("ai ") }
 
     /// The name without the doctor's grouping prefix.
     public var title: String {
-        let label = isSecurity ? String(name.dropFirst("security ".count)) : name
+        let label = name.hasPrefix("security ") ? String(name.dropFirst("security ".count))
+            : name.hasPrefix("ai ") ? "AI: " + name.dropFirst("ai ".count) : name
         return label.prefix(1).uppercased() + label.dropFirst()
     }
 }

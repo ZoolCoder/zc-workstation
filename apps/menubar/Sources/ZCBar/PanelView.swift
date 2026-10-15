@@ -92,7 +92,12 @@ private struct Header: View {
         guard let at = store.refreshedAt else { return "" }
         let n = store.attention
         let state = n == 0 ? "Everything in place" : "\(n) need\(n == 1 ? "s" : "") attention"
-        return state + " · " + at.formatted(.relative(presentation: .named))
+        var line = state + " · " + at.formatted(.relative(presentation: .named))
+        // The daily check, which ran even while this panel was closed.
+        if let d = store.snapshot?.drift, d.error == nil, d.changes > 0 {
+            line += " · drift \(d.changes) since " + d.at.formatted(date: .omitted, time: .shortened)
+        }
+        return line
     }
 }
 
