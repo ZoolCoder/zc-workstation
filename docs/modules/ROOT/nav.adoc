@@ -3,6 +3,8 @@
 * xref:getting-started.adoc[Getting started]
 * xref:configuration.adoc[Writing a config]
 * xref:new-machine.adoc[A new Mac in one command]
+* xref:linux.adoc[A Linux machine]
+* xref:windows.adoc[A Windows machine]
 
 .Use it
 * xref:providers.adoc[Providers]

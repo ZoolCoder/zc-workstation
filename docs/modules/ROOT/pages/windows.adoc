@@ -1,0 +1,58 @@
+= A Windows machine
+:description: Set up Windows with zc-workstation: winget packages, chezmoi dotfiles and mise runtimes.
+
+On Windows, zc-workstation installs packages with winget, applies dotfiles
+with chezmoi and installs runtimes with mise. Settings and services come in a
+later phase; the xref:roadmap.adoc[roadmap] tracks them.
+
+== Before the first plan
+
+winget ships with Windows 11 and current Windows 10. Install chezmoi and mise
+with it, then download the `windows_amd64` or `windows_arm64` zip from the
+releases page and put `zc-workstation.exe` on your `PATH`.
+
+[source,powershell]
+----
+PS> winget install --id twpayne.chezmoi --exact
+PS> winget install --id jdx.mise --exact
+----
+
+== A config for Windows
+
+The packages target reads a `winget export` file. Give it `os: [windows]`,
+so the same config also drives your Mac and Linux machines.
+
+[source,yaml]
+----
+version: 1
+targets:
+  - name: winget
+    provider: packages
+    os: [windows]
+    file: winget.json
+  - name: home
+    provider: dotfiles
+    source: home
+  - name: runtimes
+    provider: tools
+    file: mise.toml
+----
+
+Write `winget.json` from what the machine has with
+`winget export -o winget.json`, or start from `example/winget.json`.
+chezmoi names files the same way on every system; use its templates for what
+differs, such as `{{ if eq .chezmoi.os "windows" }}`.
+
+== Plan, apply, check
+
+[source,powershell]
+----
+PS> zc-workstation plan -out plan.json
+PS> zc-workstation apply plan.json
+PS> zc-workstation doctor
+----
+
+== Not on Windows yet
+
+The `settings`, `services` and `desktop` providers are macOS and Linux
+only. ZCBar and ZC Care are macOS apps.
