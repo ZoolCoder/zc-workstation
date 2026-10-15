@@ -77,3 +77,42 @@ func TestPlanNeedsNoBrewForAgentsOnly(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestPlanEnablesSystemdUnits(t *testing.T) {
+	r := &sh.Fake{Out: map[string]string{
+		"systemctl --user show backup.timer --property=ActiveState,UnitFileState":      "ActiveState=active\nUnitFileState=enabled\n",
+		"systemctl --user show syncthing.service --property=ActiveState,UnitFileState": "ActiveState=inactive\nUnitFileState=disabled\n",
+		"systemctl --user show gone.service --property=ActiveState,UnitFileState":      "ActiveState=inactive\nUnitFileState=\n",
+	}}
+	p := Provider{r: r, uid: 1000}
+	tg := config.Target{Name: "services", Provider: "services", OS: []string{"linux"},
+		Agents: []string{"/home/me/.config/systemd/user/backup.timer", "/home/me/units/syncthing.service", "/home/me/units/gone.service"}}
+	actions, err := p.Plan(context.Background(), tg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, a := range actions {
+		got = append(got, a.Resource+": "+a.Detail)
+		if err := a.Do(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	want := []string{
+		"unit:syncthing.service: enable and start with systemctl --user (now disabled, inactive)",
+		"unit:gone.service: enable and start with systemctl --user (now not found)",
+	}
+	if !slices.Equal(got, want) {
+		t.Fatalf("plan\n got %q\nwant %q", got, want)
+	}
+	ran := []string{
+		"systemctl --user daemon-reload", "systemctl --user enable --now /home/me/units/syncthing.service",
+		"systemctl --user daemon-reload", "systemctl --user enable --now /home/me/units/gone.service",
+	}
+	if !slices.Equal(r.Ran, ran) {
+		t.Fatalf("ran\n got %q\nwant %q", r.Ran, ran)
+	}
+	if got := p.Programs(tg); !slices.Equal(got, []string{"systemctl"}) {
+		t.Fatalf("programs %v", got)
+	}
+}

@@ -231,8 +231,10 @@ Keeps macOS preferences at the values the config declares, the keys
 [#services]
 == services
 
-Keeps background services running: Homebrew services and launchd agents.
-macOS only. It starts what is stopped and never stops anything.
+Keeps background services running: Homebrew services, launchd agents on
+macOS, and systemd user units and timers on Linux. A target drives one
+system, `os: [darwin]` or `os: [linux]`. It starts what is stopped and never
+stops anything.
 
 [source,yaml]
 ----
@@ -253,6 +255,24 @@ macOS only. It starts what is stopped and never stops anything.
   earlier in the config, which writes it first.
 * A changed plist is not reloaded. Reload it from a chezmoi `run_onchange_`
   script that hashes the plist.
+
+On Linux, `agents` names `.service` and `.timer` files:
+
+[source,yaml]
+----
+- name: services-linux
+  provider: services
+  os: [linux]
+  agents: [~/.config/systemd/user/backup.timer, ~/units/syncthing.service]
+----
+
+* A unit is in place when `systemctl --user show` reports it enabled and
+  active; a timer is active while it waits for its next run.
+* Otherwise apply runs `systemctl --user daemon-reload`, then
+  `systemctl --user enable --now` with the file's path, which links in a unit
+  that lives outside systemd's folders.
+* `services` works on Linux too: Homebrew on Linux runs `brew services` on
+  systemd.
 
 [#agents]
 == agents
