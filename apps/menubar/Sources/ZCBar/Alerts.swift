@@ -31,6 +31,15 @@ enum Alerts {
         return run(alert) == .alertFirstButtonReturn
     }
 
+    static func confirm(_ title: String, _ text: String, button: String) -> Bool {
+        let alert = NSAlert()
+        alert.messageText = title
+        alert.informativeText = text
+        alert.addButton(withTitle: button)
+        alert.addButton(withTitle: "Cancel")
+        return run(alert) == .alertFirstButtonReturn
+    }
+
     static func info(_ title: String, _ text: String) {
         let alert = NSAlert()
         alert.messageText = title

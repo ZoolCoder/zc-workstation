@@ -30,7 +30,18 @@ final class Store {
         }
     }
 
-    var tab: Tab = .overview
+    var tab: Tab = .mac
+    /// Disk, memory, CPU and the rest, for the Mac tab.
+    let monitor = Monitor()
+    /// The Mac tab's open tile: what Free Up clears, or the busiest apps.
+    var macDetail: MacDetail? {
+        didSet {
+            monitor.order = macDetail == .memory ? .memory : macDetail == .cpu ? .cpu : nil
+            if macDetail == .disk, monitor.junk.isEmpty { Task { await monitor.scan() } }
+        }
+    }
+
+    enum MacDetail: String { case disk, memory, cpu }
     /// The target whose items the overview shows, and what they are.
     var expanded: String?
     var targetItems: [String: [Item]] = [:]
@@ -38,7 +49,7 @@ final class Store {
     var jobs: [Job] = []
 
     enum Tab: String, CaseIterable {
-        case overview = "Overview", updates = "Updates", health = "Health", services = "Services"
+        case mac = "Mac", overview = "Overview", updates = "Updates", health = "Health", services = "Services"
     }
 
     struct Message: Equatable {

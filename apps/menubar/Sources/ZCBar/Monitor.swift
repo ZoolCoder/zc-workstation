@@ -1,0 +1,166 @@
+import AppKit
+import Observation
+import ZCBarCore
+
+/// Samples the Mac's vitals for the Mac tab, every two seconds while it
+/// shows: rates from the kernel each time, sensors every ten seconds, and
+/// devices and battery health, which system_profiler is slow to give, each
+/// minute.
+@MainActor @Observable
+final class Monitor {
+    var vitals = Vitals()
+    var model = "Mac"
+    /// The busiest processes, while the memory or CPU tile is open.
+    var top: [Proc] = []
+    var order: Order? {
+        didSet {
+            guard order != oldValue else { return }
+            top = []
+            Task { await readTop() }
+        }
+    }
+    var speed: SpeedTest?
+    var testingSpeed = false
+    /// What each Free Up folder takes, once scanned.
+    var junk: [String: Int64] = [:]
+    var scanning = false
+
+    enum Order { case memory, cpu }
+
+    private var sampler = Sampler()
+    private var loop: Task<Void, Never>?
+    private var tick = 0
+    private let macmon = ["/opt/homebrew/bin/macmon", "/usr/local/bin/macmon"].first(where: FileManager.default.isExecutableFile)
+
+    func start() {
+        guard loop == nil else { return }
+        tick = 0
+        loop = Task { [weak self] in
+            while !Task.isCancelled {
+                await self?.sample()
+                try? await Task.sleep(for: .seconds(2))
+            }
+        }
+    }
+
+    func stop() {
+        loop?.cancel()
+        loop = nil
+    }
+
+    private func sample() async {
+        if let load = sampler.cpuLoad() { vitals.cpuLoad = load }
+        vitals.memory = sampler.memory()
+        vitals.network = sampler.network()
+        var battery = sampler.battery()
+        battery?.health = vitals.battery?.health
+        battery?.capacity = vitals.battery?.capacity
+        battery?.cycles = vitals.battery?.cycles
+        vitals.battery = battery
+        if tick % 5 == 0 {
+            vitals.disk = sampler.disk()
+            if let macmon, let r = try? await ProcessRunner().run(macmon, ["pipe", "-s", "1", "-i", "200"], env: [:]) {
+                vitals.sensors = Sensors.parse(macmon: r.stdout) ?? vitals.sensors
+            }
+        }
+        if tick % 30 == 0 { await readSystemProfile() }
+        if order != nil, tick % 2 == 1 { await readTop() }
+        tick += 1
+    }
+
+    private func readSystemProfile() async {
+        let args = ["-json", "SPHardwareDataType", "SPPowerDataType", "SPBluetoothDataType"]
+        guard let r = try? await ProcessRunner().run("/usr/sbin/system_profiler", args, env: [:]) else { return }
+        vitals.devices = Device.parse(systemProfiler: r.stdout)
+        vitals.battery?.read(systemProfiler: r.stdout)
+        let root = try? JSONSerialization.jsonObject(with: r.stdout) as? [String: Any]
+        if let name = ((root?["SPHardwareDataType"] as? [[String: Any]])?.first?["machine_name"] as? String) {
+            model = name
+        }
+    }
+
+    func readTop() async {
+        guard let order else { return }
+        let args = ["-Aceo", "pid=,pcpu=,rss=,comm=", order == .memory ? "-m" : "-r"]
+        guard let r = try? await ProcessRunner().run("/bin/ps", args, env: [:]), self.order == order else { return }
+        top = Array(Proc.parse(ps: r.output).prefix(6))
+    }
+
+    /// Sizes every Free Up folder, off the main thread: caches run to
+    /// gigabytes in many small files.
+    func scan() async {
+        guard !scanning else { return }
+        scanning = true
+        defer { scanning = false }
+        let open = runningApps()
+        for spot in Junk.spots(home: NSHomeDirectory()) {
+            let keep = spot.id == "caches" ? open : []
+            junk[spot.id] = await Task.detached { spot.size(keeping: keep) }.value
+        }
+    }
+
+    /// Open apps' bundle ids: their caches stay while they run.
+    func runningApps() -> Set<String> {
+        Set(NSWorkspace.shared.runningApplications.compactMap(\.bundleIdentifier))
+    }
+
+    func readDisk() { vitals.disk = sampler.disk() }
+}
+
+// MARK: Actions
+
+extension Store {
+    func clean(_ spot: Junk) async {
+        let size = monitor.junk[spot.id] ?? 0
+        guard busy == nil, Alerts.confirm("Clear \(spot.title)?",
+                                          "This deletes \(Self.bytes(size)) in \(spot.path).\n\n\(spot.detail)",
+                                          button: "Clear") else { return }
+        busy = "Clearing \(spot.title)"
+        defer { busy = nil }
+        let keep = spot.id == "caches" ? monitor.runningApps() : []
+        let stuck = await Task.detached { spot.empty(keeping: keep) }.value
+        let left = await Task.detached { spot.size(keeping: keep) }.value
+        monitor.junk[spot.id] = left
+        monitor.readDisk()
+        message = Message(text: "\(spot.title): freed \(Self.bytes(max(size - left, 0)))"
+                          + (stuck > 0 ? "; \(stuck) in use stayed." : "."), failed: false)
+    }
+
+    /// The Finder empties the Trash: the app cannot read it without Full
+    /// Disk Access. macOS asks once to let ZCBar control the Finder.
+    func emptyTrash() async {
+        guard busy == nil, Alerts.confirm("Empty the Trash?", "What is in the Trash is deleted for good.",
+                                          button: "Empty Trash") else { return }
+        busy = "Emptying the Trash"
+        defer { busy = nil }
+        let r = try? await ProcessRunner().run("/usr/bin/osascript", ["-e", #"tell application "Finder" to empty trash"#], env: [:])
+        monitor.readDisk()
+        message = r?.status == 0
+            ? Message(text: "The Trash is empty.", failed: false)
+            : Message(text: "Trash not emptied. \(r?.stderr ?? "")", failed: true)
+    }
+
+    func testSpeed() async {
+        guard !monitor.testingSpeed else { return }
+        monitor.testingSpeed = true
+        defer { monitor.testingSpeed = false }
+        let r = try? await ProcessRunner().run("/usr/bin/networkQuality", ["-c"], env: [:])
+        guard let r, let result = SpeedTest.parse(r.stdout) else {
+            message = Message(text: "Speed test failed. \(r?.stderr ?? "")", failed: true)
+            return
+        }
+        monitor.speed = result
+    }
+
+    func quit(_ app: NSRunningApplication) {
+        app.terminate()
+        Task {
+            try? await Task.sleep(for: .seconds(1))
+            await monitor.readTop()
+        }
+    }
+
+    static func bytes(_ n: Int64, _ style: ByteCountFormatter.CountStyle = .file) -> String {
+        ByteCountFormatter.string(fromByteCount: n, countStyle: style)
+    }
+}

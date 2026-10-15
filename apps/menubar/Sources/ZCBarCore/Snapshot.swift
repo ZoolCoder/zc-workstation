@@ -9,6 +9,8 @@ public struct Snapshot: Sendable, Equatable {
     public var services: [Item] = []
     /// The doctor checks that are not ok.
     public var findings: [Check]
+    /// Every security check, passing or not: the Mac tab's protection.
+    public var security: [Check] = []
     /// A part that could not be read, so the rest still shows.
     public var errors: [String]
 

@@ -69,6 +69,16 @@ final class PanelWindow: NSObject, NSWindowDelegate {
         panel.setFrameOrigin(NSPoint(x: panel.frame.minX, y: top - panel.frame.height))
     }
 
+    /// The Mac tab samples only while someone can see it.
+    func windowDidChangeOcclusionState(_ notification: Notification) {
+        guard let panel else { return }
+        if !panel.occlusionState.contains(.visible) {
+            store.monitor.stop()
+        } else if store.tab == .mac {
+            store.monitor.start()
+        }
+    }
+
     /// Clicking elsewhere closes the panel, but not an alert the panel asked.
     func windowDidResignKey(_ notification: Notification) {
         guard NSApp.modalWindow == nil, store.busy == nil else { return }

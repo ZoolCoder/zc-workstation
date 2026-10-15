@@ -37,14 +37,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func open(_ event: NSAppleEventDescriptor, reply: NSAppleEventDescriptor) {
         guard let url = event.paramDescriptor(forKeyword: keyDirectObject)?.stringValue.flatMap(URL.init(string:)),
               url.host() == "panel" else { return }
-        // zcbar://panel/updates opens a tab, zcbar://panel/overview/home a target in it.
+        // zcbar://panel/updates opens a tab, zcbar://panel/overview/home a
+        // target in it, zcbar://panel/mac/disk a tile.
         let parts = url.pathComponents.filter { $0 != "/" }
         guard let name = parts.first, let tab = Store.Tab.allCases.first(where: { $0.rawValue.lowercased() == name }) else {
             window.toggle()
             return
         }
         store.tab = tab
-        if parts.count > 1, store.expanded != parts[1] { store.toggle(parts[1]) }
+        if parts.count > 1 {
+            if tab == .mac {
+                store.macDetail = Store.MacDetail(rawValue: parts[1])
+            } else if store.expanded != parts[1] {
+                store.toggle(parts[1])
+            }
+        }
         window.show()
     }
 

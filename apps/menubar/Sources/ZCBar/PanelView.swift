@@ -2,8 +2,9 @@ import AppKit
 import SwiftUI
 import ZCBarCore
 
-/// The panel under the bar: a tab each for coverage, updates, the doctor's
-/// findings and services, with plan, apply and the dashboard below.
+/// The panel under the bar: a tab each for the Mac's vitals, coverage,
+/// updates, the doctor's findings and services, with plan, apply and the
+/// dashboard below.
 struct PanelView: View {
     @Bindable var store: Store
 
@@ -18,6 +19,7 @@ struct PanelView: View {
                     VStack(alignment: .leading, spacing: 14) {
                         ForEach(snapshot.errors, id: \.self) { Text($0).font(.caption).foregroundStyle(.red) }
                         switch store.tab {
+                        case .mac: MacTab(store: store, snapshot: snapshot)
                         case .overview: OverviewTab(store: store, snapshot: snapshot)
                         case .updates: UpdatesTab(store: store, items: snapshot.outdated)
                         case .health: HealthTab(store: store)
@@ -26,7 +28,7 @@ struct PanelView: View {
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .frame(height: 400)
+                .frame(height: 440)
             } else {
                 ProgressView("Reading this Mac…").frame(maxWidth: .infinity, minHeight: 200)
             }
@@ -35,7 +37,7 @@ struct PanelView: View {
             Footer(store: store)
         }
         .padding(14)
-        .frame(width: 400)
+        .frame(width: 430)
         .onAppear { store.refreshIfStale() }
     }
 }
@@ -125,6 +127,7 @@ private struct Tabs: View {
 
     private func count(_ tab: Store.Tab) -> Int? {
         switch tab {
+        case .mac: store.monitor.vitals.concerns(insecure: 0).count
         case .overview: snapshot.targets.map(\.gaps).reduce(0, +)
         case .updates: snapshot.outdated.count
         case .health: store.findings.count
@@ -148,7 +151,7 @@ private struct SetupCard: View {
     }
 }
 
-private struct SectionTitle: View {
+struct SectionTitle: View {
     let title: String
     var count: Int?
 
@@ -160,7 +163,7 @@ private struct SectionTitle: View {
     }
 }
 
-private struct EmptyNote: View {
+struct EmptyNote: View {
     let text: String
     var symbol = "checkmark.circle"
 
@@ -173,7 +176,7 @@ private struct EmptyNote: View {
 }
 
 /// A row that lights up under the mouse, like a menu item.
-private struct Hover: ViewModifier {
+struct Hover: ViewModifier {
     @State private var over = false
 
     func body(content: Content) -> some View {

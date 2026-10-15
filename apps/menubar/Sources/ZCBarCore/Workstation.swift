@@ -93,9 +93,9 @@ public struct Workstation: Sendable {
 
     public func status() async throws -> [TargetStatus] { try await json(["status", "-json"]) }
 
-    public func findings() async throws -> [Check] {
+    public func checks() async throws -> [Check] {
         let report: DoctorReport = try await json(["doctor", "-json"])
-        return report.checks.filter { !$0.isOK }
+        return report.checks
     }
 
     public func outdated() async throws -> [Item] { try await items(states: ["outdated"]) }
@@ -132,7 +132,7 @@ public struct Workstation: Sendable {
     public func snapshot() async -> Snapshot {
         async let t = await Result(catching: { try await status() })
         async let o = await Result(catching: { try await outdated() })
-        async let f = await Result(catching: { try await findings() })
+        async let f = await Result(catching: { try await checks() })
         var s = Snapshot()
         var errors: [String] = []
         switch await t {
@@ -144,7 +144,9 @@ public struct Workstation: Sendable {
         case .failure(let e): errors.append("list: " + e.localizedDescription)
         }
         switch await f {
-        case .success(let v): s.findings = v
+        case .success(let v):
+            s.findings = v.filter { !$0.isOK }
+            s.security = v.filter(\.isSecurity)
         case .failure(let e): errors.append("doctor: " + e.localizedDescription)
         }
         let services = s.targets.filter { $0.provider == "services" && !$0.isSkipped }.map(\.target)

@@ -42,6 +42,7 @@ func ok(_ json: String) -> CommandResult { CommandResult(status: 0, stdout: Data
     #expect(s.services.isEmpty)
     #expect(s.outdated.last?.target == "runtimes")
     #expect(s.findings(ignoring: []).map(\.title) == ["Firewall", "Servers on every network interface"])
+    #expect(s.security.count == 2)
     // One gap, one for all updates, two findings.
     #expect(s.attention(ignoring: []) == 4)
     #expect(s.attention(ignoring: ["security servers on every network interface"]) == 3)
@@ -141,4 +142,50 @@ func ok(_ json: String) -> CommandResult { CommandResult(status: 0, stdout: Data
         == ["bootout", "gui/501", "/h/Library/LaunchAgents/local.weekly-update.plist"])
     #expect(Launchd.command(.restart, for: agent, uid: 501, home: "/h", brew: "/b/brew")?.1.last
         == "/h/Library/LaunchAgents/local.weekly-update.plist")
+}
+
+@Test func vitalsParseWhatTheToolsPrint() {
+    let sensors = Sensors.parse(macmon: Data(#"{"temp":{"cpu_temp_avg":60.5},"fans":[{"rpm":2325},{"rpm":2505}]}\#n"#.utf8))
+    #expect(sensors == Sensors(cpuTemp: 60.5, fans: [2325, 2505]))
+
+    var battery = Battery(percent: 100, onAC: true)
+    battery.read(systemProfiler: Data(#"{"SPPowerDataType":[{"sppower_battery_health_info":{"sppower_battery_cycle_count":311,"sppower_battery_health":"Good","sppower_battery_health_maximum_capacity":"84 %"}}]}"#.utf8))
+    #expect(battery.health == "Good" && battery.capacity == 84 && battery.cycles == 311)
+    #expect(battery.state == "Fully charged" && !battery.needsService)
+
+    let devices = Device.parse(systemProfiler: Data(#"{"SPBluetoothDataType":[{"device_connected":[{"soundcore Q20i":{"device_minorType":"Headset"}},{"AirPods":{"device_minorType":"Headphones","device_batteryLevelLeft":"80%","device_batteryLevelRight":"70%"}}]}]}"#.utf8))
+    #expect(devices == [Device(name: "AirPods", kind: "Headphones", battery: 70), Device(name: "soundcore Q20i", kind: "Headset")])
+
+    #expect(SpeedTest.parse(Data(#"{"dl_throughput":695232832,"ul_throughput":53217972,"base_rtt":33.05}"#.utf8))?.down == 695232832)
+
+    let procs = Proc.parse(ps: " 1462  17.0 1517280 com.apple.Virtualization.VirtualMachine\n  40387   4.1 826432 Google Chrome Helper\n")
+    #expect(procs.map(\.name) == ["com.apple.Virtualization.VirtualMachine", "Google Chrome Helper"])
+    #expect(procs.first?.memory == Int64(1517280 * 1024))
+}
+
+@Test func adviceNamesTheWorstFirst() {
+    var v = Vitals()
+    v.disk = Disk(name: "Macintosh HD", total: 500_000_000_000, available: 97_000_000_000)
+    v.memory = Memory(pressure: 15, used: 0, total: 0)
+    #expect(v.grade(insecure: 0) == .excellent)
+    #expect(v.advice(insecure: 0, updates: 40).action == .updates)
+    #expect(v.advice(insecure: 0, updates: 0).action == .none)
+
+    v.disk?.available = 15_000_000_000
+    #expect(v.grade(insecure: 5) == .fair)
+    #expect(v.advice(insecure: 5, updates: 40).action == .freeUp)
+}
+
+@Test func junkEmptiesAllButWhatItKeeps() throws {
+    let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    try FileManager.default.createDirectory(at: dir.appendingPathComponent("a/b"), withIntermediateDirectories: true)
+    try Data(count: 10_000).write(to: dir.appendingPathComponent("a/b/f"))
+    try Data(count: 10_000).write(to: dir.appendingPathComponent("Homebrew"))
+    defer { try? FileManager.default.removeItem(at: dir) }
+
+    let junk = Junk(id: "t", title: "t", detail: "", path: dir.path, keep: ["Homebrew"])
+    #expect(junk.size() >= 10_000 && junk.size() < 20_000)
+    #expect(junk.empty() == 0)
+    #expect(try FileManager.default.contentsOfDirectory(atPath: dir.path) == ["Homebrew"])
+    #expect(Junk.spots(home: "/h").allSatisfy { $0.path.hasPrefix("/h/") })
 }
