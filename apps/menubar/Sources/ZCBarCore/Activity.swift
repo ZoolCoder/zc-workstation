@@ -4,7 +4,7 @@ import Foundation
 public struct ActivityEntry: Codable, Sendable, Equatable {
     public enum Kind: String, Codable, Sendable, CaseIterable {
         case junk = "System Junk", ai = "AI Clutter", files = "Personal Files", developer = "Developer"
-        case apps = "Applications", maintenance = "Maintenance Tasks"
+        case apps = "Applications", maintenance = "Maintenance Tasks", privacy = "Browser Privacy"
     }
 
     public var date: Date

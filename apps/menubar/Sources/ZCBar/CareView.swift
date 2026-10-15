@@ -1317,6 +1317,28 @@ private struct Protection: View {
                         }
                         .padding(10)
                     }
+                    Section("Browser Privacy") {
+                        if let traces = care.browserTraces {
+                            if traces.isEmpty {
+                                Text("No browser keeps history, cookies or caches ZCBar can read.").foregroundStyle(.secondary).padding(10)
+                            }
+                            ForEach(traces) { trace in
+                                let open = care.isRunning(trace.bundleID)
+                                Row(icon: SymbolTile(symbol: symbol(trace.kind), colors: open ? Tint.gray : Tint.violet, size: 32),
+                                    title: "\(trace.browser) \(trace.kind)",
+                                    detail: open ? "Quit \(trace.browser) to clear it" : "\(trace.paths.count) items",
+                                    value: Store.bytes(trace.size)) {
+                                    Button("Clear") { Task { await care.clearBrowser(trace) } }
+                                        .controlSize(.small)
+                                        .disabled(open)
+                                }
+                            }
+                        } else {
+                            ProgressView().controlSize(.small).padding(10)
+                        }
+                        Text("Browsers keep history and cookies from apps without Full Disk Access; ZCBar lists what it can read. A browser clears only while it is closed.")
+                            .font(.caption).foregroundStyle(.secondary).padding(10)
+                    }
                     Section("Privacy Permissions") {
                         if let permissions = care.permissions {
                             if permissions.isEmpty {
@@ -1347,6 +1369,14 @@ private struct Protection: View {
             }
         }
         .task { if care.gatekeeper == nil { await care.loadProtection() } }
+    }
+
+    private func symbol(_ kind: String) -> String {
+        switch kind {
+        case BrowserPrivacy.history: "clock.arrow.circlepath"
+        case BrowserPrivacy.cookies: "birthday.cake.fill"
+        default: "internaldrive.fill"
+        }
     }
 
     private var subtitle: String {

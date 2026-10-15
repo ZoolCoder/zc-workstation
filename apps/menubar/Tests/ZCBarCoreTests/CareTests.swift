@@ -407,3 +407,31 @@ private func write(_ url: URL, bytes: Int) throws {
     try log.save(to: url)
     #expect(ActivityLog.load(from: url) == log)
 }
+
+@Test func browserPrivacyFindsHistoryCookiesAndCacheButNotBookmarks() throws {
+    let home = try tempDir()
+    defer { try? FileManager.default.removeItem(at: home) }
+    let chrome = "Library/Application Support/Google/Chrome/"
+    try write(home.appendingPathComponent(chrome + "Default/Preferences"), bytes: 10)
+    try write(home.appendingPathComponent(chrome + "Default/History"), bytes: 50_000)
+    try write(home.appendingPathComponent(chrome + "Default/History-journal"), bytes: 5_000)
+    try write(home.appendingPathComponent(chrome + "Default/Bookmarks"), bytes: 5_000)
+    try write(home.appendingPathComponent(chrome + "Profile 1/Preferences"), bytes: 10)
+    try write(home.appendingPathComponent(chrome + "Profile 1/Network/Cookies"), bytes: 20_000)
+    try write(home.appendingPathComponent(chrome + "System Profile/History"), bytes: 20_000)
+    try write(home.appendingPathComponent("Library/Caches/Google/Chrome/Default/Cache/data_0"), bytes: 80_000)
+    let firefox = "Library/Application Support/Firefox/Profiles/abc.default/"
+    try write(home.appendingPathComponent(firefox + "places.sqlite"), bytes: 40_000)
+    try write(home.appendingPathComponent(firefox + "cookies.sqlite"), bytes: 30_000)
+
+    let traces = BrowserPrivacy.find(home: home.path)
+    #expect(traces.map(\.id) == ["com.google.Chrome History", "com.google.Chrome Cookies",
+                                 "com.google.Chrome Cache", "org.mozilla.firefox Cookies"])
+    let names = Set(traces.flatMap(\.paths).map(\.lastPathComponent))
+    #expect(names == ["History", "History-journal", "Cookies", "Default", "cookies.sqlite"])
+
+    let history = try #require(traces.first)
+    #expect(BrowserPrivacy.clear(history) == 0)
+    #expect(!FileManager.default.fileExists(atPath: home.path + "/" + chrome + "Default/History"))
+    #expect(FileManager.default.fileExists(atPath: home.path + "/" + chrome + "Default/Bookmarks"))
+}
