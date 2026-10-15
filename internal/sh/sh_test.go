@@ -2,6 +2,7 @@ package sh
 
 import (
 	"context"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -46,7 +47,10 @@ func TestAskpassOnlyWithoutTerminal(t *testing.T) {
 		t.Skip("running in a terminal")
 	}
 	env := askpassEnv()
-	if !slices.ContainsFunc(env, func(v string) bool { return strings.HasPrefix(v, "SUDO_ASKPASS=/") }) {
+	if !slices.ContainsFunc(env, func(v string) bool {
+		path, ok := strings.CutPrefix(v, "SUDO_ASKPASS=")
+		return ok && filepath.IsAbs(path)
+	}) {
 		t.Fatalf("no askpass in %v", env)
 	}
 	t.Setenv("SUDO_ASKPASS", "/bin/mine")
