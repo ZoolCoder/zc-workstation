@@ -82,7 +82,8 @@ type Target struct {
 	Defaults map[string]map[string]any `yaml:"defaults"`
 	// Services are the Homebrew services the services provider keeps running.
 	Services []string `yaml:"services"`
-	// Agents are launchd agent plists the services provider keeps loaded.
+	// Agents are launchd agent plists, or on Linux systemd user units and
+	// timers, the services provider keeps loaded.
 	Agents []string `yaml:"agents"`
 }
 
@@ -283,13 +284,22 @@ func (t Target) validateFields(where string) []error {
 		if len(t.Services) == 0 && len(t.Agents) == 0 {
 			errs = append(errs, fmt.Errorf("%s: set services or agents for provider services", where))
 		}
+		linux := slices.Equal(t.OS, []string{"linux"})
+		if !linux && !slices.Equal(t.OS, []string{"darwin"}) {
+			errs = append(errs, fmt.Errorf("%s: provider services drives one system; set os: [darwin] or os: [linux]", where))
+		}
 		for _, a := range t.Agents {
-			if filepath.Ext(a) != ".plist" {
-				errs = append(errs, fmt.Errorf("%s: agent %q must be a .plist file", where, a))
+			switch ext := filepath.Ext(a); {
+			case ext != ".plist" && ext != ".service" && ext != ".timer":
+				errs = append(errs, fmt.Errorf("%s: agent %q must be a .plist, .service or .timer file", where, a))
+			case linux && ext == ".plist":
+				errs = append(errs, fmt.Errorf("%s: agent %q is a launchd plist; Linux takes .service and .timer units", where, a))
+			case !linux && ext != ".plist":
+				errs = append(errs, fmt.Errorf("%s: agent %q is a systemd unit; macOS takes .plist files", where, a))
 			}
 		}
 	}
-	if (t.Provider == "desktop" || t.Provider == "settings" || t.Provider == "services") && !slices.Equal(t.OS, []string{"darwin"}) {
+	if (t.Provider == "desktop" || t.Provider == "settings") && !slices.Equal(t.OS, []string{"darwin"}) {
 		errs = append(errs, fmt.Errorf("%s: provider %s drives macOS only; set os: [darwin]", where, t.Provider))
 	}
 	if t.Provider != "localdir" {

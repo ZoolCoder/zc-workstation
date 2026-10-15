@@ -26,7 +26,6 @@ same work. Remove the line in the pull request that finishes it.
 
 ## Linux (phase 2)
 
-- [ ] `services` on systemd: user units and timers.
 - [ ] `settings` on GNOME: gsettings keys, with a light and dark theme.
 - [ ] keyd for Caps Lock as Escape and Hyper.
 - [ ] `apply` then `doctor` in Ubuntu LTS and Fedora containers in CI.

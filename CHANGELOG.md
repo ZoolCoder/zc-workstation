@@ -78,6 +78,8 @@ here with what to edit.
 
 ### Providers
 
+- `services` runs on Linux: systemd user units and timers under `agents`,
+  enabled and started with `systemctl --user`.
 - `packages` (brew, mas, apt, dnf, winget), `dotfiles` (chezmoi) and `tools`
   (mise).
   - `packages` adopts apps already installed and trusts a third-party tap
