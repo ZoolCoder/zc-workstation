@@ -201,8 +201,9 @@ reach a `data:` URL, so the saver shows the page's default, dark look.
 [#settings]
 == settings
 
-Keeps macOS preferences at the values the config declares, the keys
-`defaults` reads and writes. macOS only, so the target needs `os: [darwin]`.
+Keeps preferences at the values the config declares: on macOS the keys
+`defaults` reads and writes, on GNOME the keys of `gsettings`. A target drives
+one system, `os: [darwin]` with `defaults` or `os: [linux]` with `gsettings`.
 
 [source,yaml]
 ----
@@ -227,6 +228,33 @@ Keeps macOS preferences at the values the config declares, the keys
   `com.apple.screencapture` adds an action that restarts it.
 * A key the config stops declaring keeps its value. Some keys need a logout
   to take effect.
+
+On GNOME, `gsettings` maps a schema to its keys. A dark desktop with the
+dark Adwaita theme, a faster key repeat and the dock's apps:
+
+[source,yaml]
+----
+- name: gnome
+  provider: settings
+  os: [linux]
+  gsettings:
+    org.gnome.desktop.interface:
+      color-scheme: prefer-dark   # prefer-light or default for a light one
+      gtk-theme: Adwaita-dark     # Adwaita for a light one
+    org.gnome.desktop.peripherals.keyboard:
+      delay: 250
+      repeat-interval: 20
+    org.gnome.shell:
+      favorite-apps: [org.gnome.Nautilus.desktop, com.mitchellh.ghostty.desktop]
+----
+
+* The plan reads each key with `gsettings get` and compares values whatever
+  the type gsettings prints, so `uint32 250` matches `250`.
+* Apply runs `gsettings set` with the value as GVariant text: a string is
+  quoted, a list becomes an array of strings. GNOME applies a change at once;
+  nothing restarts.
+* A schema or key GNOME does not know is a `CREATE` whose apply fails with
+  gsettings' message.
 
 [#services]
 == services

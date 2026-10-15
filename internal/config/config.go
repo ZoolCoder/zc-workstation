@@ -80,6 +80,10 @@ type Target struct {
 	// NSGlobalDomain, to the keys the settings provider keeps and their
 	// values: a bool, an integer, a number or a string.
 	Defaults map[string]map[string]any `yaml:"defaults"`
+	// Gsettings maps a GNOME schema, such as org.gnome.desktop.interface, to
+	// the keys the settings provider keeps on Linux: a bool, a number, a
+	// string or a list of strings.
+	Gsettings map[string]map[string]any `yaml:"gsettings"`
 	// Services are the Homebrew services the services provider keeps running.
 	Services []string `yaml:"services"`
 	// Agents are launchd agent plists, or on Linux systemd user units and
@@ -268,8 +272,19 @@ func (t Target) validateFields(where string) []error {
 			errs = append(errs, fmt.Errorf("%s: accent %q is not one of %s", where, t.Accent, strings.Join(Accents, ", ")))
 		}
 	case "settings":
-		if len(t.Defaults) == 0 {
-			errs = append(errs, fmt.Errorf("%s: defaults is required for provider settings", where))
+		switch {
+		case slices.Equal(t.OS, []string{"linux"}):
+			if len(t.Gsettings) == 0 {
+				errs = append(errs, fmt.Errorf("%s: gsettings is required for provider settings on linux", where))
+			}
+			unused("defaults", len(t.Defaults) > 0)
+		case slices.Equal(t.OS, []string{"darwin"}):
+			if len(t.Defaults) == 0 {
+				errs = append(errs, fmt.Errorf("%s: defaults is required for provider settings", where))
+			}
+			unused("gsettings", len(t.Gsettings) > 0)
+		default:
+			errs = append(errs, fmt.Errorf("%s: provider settings drives one system; set os: [darwin] or os: [linux]", where))
 		}
 		for domain, keys := range t.Defaults {
 			for name, v := range keys {
@@ -277,6 +292,13 @@ func (t Target) validateFields(where string) []error {
 				case bool, int, float64, string:
 				default:
 					errs = append(errs, fmt.Errorf("%s: %s %s must be a bool, number or string", where, domain, name))
+				}
+			}
+		}
+		for schema, keys := range t.Gsettings {
+			for name, v := range keys {
+				if !gvariantValue(v) {
+					errs = append(errs, fmt.Errorf("%s: %s %s must be a bool, number, string or list of strings", where, schema, name))
 				}
 			}
 		}
@@ -299,7 +321,7 @@ func (t Target) validateFields(where string) []error {
 			}
 		}
 	}
-	if (t.Provider == "desktop" || t.Provider == "settings") && !slices.Equal(t.OS, []string{"darwin"}) {
+	if t.Provider == "desktop" && !slices.Equal(t.OS, []string{"darwin"}) {
 		errs = append(errs, fmt.Errorf("%s: provider %s drives macOS only; set os: [darwin]", where, t.Provider))
 	}
 	if t.Provider != "localdir" {
@@ -328,10 +350,28 @@ func (t Target) validateFields(where string) []error {
 	}
 	if t.Provider != "settings" {
 		unused("defaults", len(t.Defaults) > 0)
+		unused("gsettings", len(t.Gsettings) > 0)
 	}
 	if t.Provider != "services" {
 		unused("services", len(t.Services) > 0)
 		unused("agents", len(t.Agents) > 0)
 	}
 	return errs
+}
+
+// gvariantValue reports whether v is a value gsettings can be given: a bool,
+// a number, a string or a list of strings.
+func gvariantValue(v any) bool {
+	switch v := v.(type) {
+	case bool, int, float64, string:
+		return true
+	case []any:
+		for _, it := range v {
+			if _, ok := it.(string); !ok {
+				return false
+			}
+		}
+		return true
+	}
+	return false
 }

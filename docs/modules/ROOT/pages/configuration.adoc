@@ -57,8 +57,9 @@ targets:
 | `desktop` | `wallpaper` | The picture to show on every desktop.
 | | `screensaver` | The web page for WebViewScreenSaver to show. Set this, `wallpaper`, `accent`, or any of them. The target needs `os: [darwin]`.
 | | `accent` | The macOS accent colour: `blue`, `purple`, `pink`, `red`, `orange`, `yellow`, `green` or `graphite`.
-| `settings` | `defaults` | Required. A macOS preferences domain, such as `com.apple.dock` or `NSGlobalDomain`, to its keys and values: a bool, an integer, a number or a string. A string starting with `~/` is a path in your home directory. The target needs `os: [darwin]`.
-| `services` | `services` | Homebrew services to keep running. Set this, `agents`, or both. The target needs `os: [darwin]`.
+| `settings` | `defaults` | Required on macOS. A macOS preferences domain, such as `com.apple.dock` or `NSGlobalDomain`, to its keys and values: a bool, an integer, a number or a string. A string starting with `~/` is a path in your home directory. The target needs `os: [darwin]`.
+| | `gsettings` | Required on Linux. A GNOME schema, such as `org.gnome.desktop.interface`, to its keys and values: a bool, a number, a string or a list of strings. The target needs `os: [linux]`.
+| `services` | `services` | Homebrew services to keep running. Set this, `agents`, or both. The target needs `os: [darwin]` or `os: [linux]`.
 | | `agents` | launchd agent plists to keep loaded, the label being the file name without `.plist`; on Linux, systemd user `.service` and `.timer` files to keep enabled and active.
 | `localdir` | `path` | Required. The directory to keep.
 | | `files` | File name to content. Names must stay inside `path`.

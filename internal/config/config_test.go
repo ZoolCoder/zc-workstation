@@ -96,6 +96,10 @@ targets:
   - {name: se, provider: services, os: [darwin], agents: [job.txt]}
   - {name: sl, provider: services, os: [darwin, linux], services: [x]}
   - {name: su, provider: services, os: [linux], agents: [a.plist]}
+  - {name: gl, provider: settings, os: [linux], defaults: {a: {b: 1}}}
+  - {name: gm, provider: settings, os: [darwin], defaults: {a: {b: 1}}, gsettings: {a: {b: 1}}}
+  - {name: gv, provider: settings, os: [linux], gsettings: {org.gnome.x: {k: [1, 2]}}}
+  - {name: go, provider: settings, os: [darwin, linux], defaults: {a: {b: 1}}}
   - {name: sm, provider: services, os: [darwin], agents: [a.timer]}
 `))
 	if err == nil {
@@ -111,6 +115,9 @@ targets:
 		"target sv: services does nothing", `target se: agent "job.txt" must be a .plist, .service or .timer file`,
 		"target sl: provider services drives one system", `target su: agent "a.plist" is a launchd plist`,
 		`target sm: agent "a.timer" is a systemd unit`,
+		"target gl: gsettings is required for provider settings on linux", "target gl: defaults does nothing",
+		"target gm: gsettings does nothing", "target gv: org.gnome.x k must be a bool, number, string or list of strings",
+		"target go: provider settings drives one system",
 	} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("error lacks %q:\n%v", want, err)
