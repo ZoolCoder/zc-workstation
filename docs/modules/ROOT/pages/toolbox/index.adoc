@@ -61,6 +61,7 @@ disk clean. See xref:app.adoc[].
 |xref:toolbox/fd-ripgrep.adoc[fd and ripgrep] |fd and ripgrep, fast find and grep that respect .gitignore.
 |xref:toolbox/jq-yq.adoc[jq and yq] |jq and yq, query and edit JSON and YAML from the command line.
 |xref:toolbox/yazi.adoc[Yazi] |Yazi, a terminal file manager with previews.
+|xref:toolbox/media.adoc[ffmpeg, sox, jpegoptim, pngquant and poppler] |Convert and shrink video, audio, images and PDFs.
 |===
 
 == Git and GitHub
@@ -84,6 +85,7 @@ disk clean. See xref:app.adoc[].
 |xref:toolbox/mise.adoc[mise] |mise, the runtime manager: Java, Node, Python and Gradle versions.
 |xref:toolbox/chezmoi.adoc[chezmoi] |chezmoi, the dotfiles engine behind the dotfiles provider.
 |xref:toolbox/direnv.adoc[direnv] |direnv, per-folder environment variables.
+|xref:toolbox/go.adoc[Go, gopls, delve and golangci-lint] |The Go toolchain, its language server, debugger and linter.
 |===
 
 == Containers and data
@@ -94,6 +96,7 @@ disk clean. See xref:app.adoc[].
 
 |xref:toolbox/containers.adoc[Colima, Docker and friends] |Colima, Docker, lazydocker, dive and the Kubernetes tools.
 |xref:toolbox/postgresql.adoc[PostgreSQL, pgcli and TablePlus] |A local PostgreSQL 17 server, pgcli and TablePlus.
+|xref:toolbox/cloud.adoc[Cloud CLIs] |AWS, Google Cloud, Hetzner, Cloudflare Tunnel, Fly.io, Neon, Supabase and the other deploy tools.
 |===
 
 == Desktop
