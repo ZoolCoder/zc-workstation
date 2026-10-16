@@ -29,6 +29,7 @@
 ** xref:toolbox/fd-ripgrep.adoc[fd and ripgrep]
 ** xref:toolbox/jq-yq.adoc[jq and yq]
 ** xref:toolbox/yazi.adoc[Yazi]
+** xref:toolbox/media.adoc[Media tools]
 * Git and GitHub
 ** xref:toolbox/git-tools.adoc[git and diff tools]
 ** xref:toolbox/lazygit.adoc[lazygit]
@@ -38,9 +39,11 @@
 ** xref:toolbox/mise.adoc[mise]
 ** xref:toolbox/chezmoi.adoc[chezmoi]
 ** xref:toolbox/direnv.adoc[direnv]
+** xref:toolbox/go.adoc[Go tools]
 * Containers and data
 ** xref:toolbox/containers.adoc[Colima and Docker]
 ** xref:toolbox/postgresql.adoc[PostgreSQL]
+** xref:toolbox/cloud.adoc[Cloud CLIs]
 * Desktop
 ** xref:toolbox/sketchybar.adoc[SketchyBar]
 ** xref:toolbox/karabiner.adoc[Karabiner and Hyper]
