@@ -4,6 +4,14 @@ Notable changes, newest first. Versions follow [semver](https://semver.org);
 before 1.0 a minor bump may change the config format, and any that does says so
 here with what to edit.
 
+## v0.1.1 — 2026-10-16
+
+- Releases sign `checksums.txt` into a sigstore bundle,
+  `checksums.txt.sigstore.json`, as cosign 3 writes it; the v0.1.0 release
+  stopped at signing and published nothing.
+- The security page's `cosign verify-blob` command takes the bundle and
+  matches the repository's owner as GitHub spells it.
+
 ## v0.1.0 — 2026-10-16
 
 ### Watch, history and upgrade
