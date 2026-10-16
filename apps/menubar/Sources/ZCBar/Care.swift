@@ -38,6 +38,9 @@ final class Care {
     var scannedAt: Date?
     var largeFiles: [LargeFile] = []
     var duplicates: [DuplicateGroup] = []
+    /// Nil until looked for: comparing every photo takes a while.
+    var similar: [SimilarGroup]?
+    var scanningImages = false
     var oldDownloads: [LargeFile] = []
     var diskImages: [LargeFile] = []
     /// node_modules and the like in projects left alone for 90 days.
@@ -61,6 +64,8 @@ final class Care {
     /// Nil until read; the TCC databases need Full Disk Access.
     var permissions: [Permission]?
     var loadingProtection = false
+    /// History, cookies and caches per browser; nil until read.
+    var browserTraces: [BrowserTrace]?
     var loadingBackground = false
     var space: SpaceScan?
     var scanningSpace = false
@@ -252,11 +257,52 @@ final class Care {
                 group.files.removeAll { $0.id == file.id }
                 return group.files.count > 1 ? group : nil
             }
+            drop([file.id])
             monitor.readDisk()
             store.record(.files, file.name, freed: file.size)
             store.message = Store.Message(text: "\(file.name) is in the Trash.", failed: false)
         } catch {
             store.message = Store.Message(text: error.localizedDescription, failed: true)
+        }
+    }
+
+    // MARK: Similar images
+
+    /// Photos in Pictures, Desktop, Downloads and Documents, grouped by how
+    /// alike Vision finds them.
+    func scanImages() async {
+        guard !scanningImages else { return }
+        scanningImages = true
+        defer { scanningImages = false }
+        let home = NSHomeDirectory()
+        let args = SimilarImages.folders(home: home).flatMap { ["-onlyin", $0] } + [SimilarImages.query]
+        guard let r = try? await ProcessRunner().run("/usr/bin/mdfind", args, env: [:]) else { return }
+        let paths = r.output.split(whereSeparator: \.isNewline).map(String.init)
+        similar = await Task.detached(priority: .utility) { SimilarImages.groups(paths: paths, home: home) }.value
+    }
+
+    /// Moves every image but the best of a group to the Trash.
+    func trashOthers(_ group: SimilarGroup) {
+        let others = group.others
+        guard store.busy == nil, Alerts.confirm("Move \(others.count) similar images to the Trash?",
+                                                "\(Store.bytes(group.wasted)). \(group.best.name) stays.",
+                                                button: "Move to Trash") else { return }
+        var moved: [LargeFile] = []
+        for file in others where (try? FileManager.default.trashItem(at: file.url, resultingItemURL: nil)) != nil {
+            moved.append(file)
+        }
+        drop(Set(moved.map(\.id)))
+        monitor.readDisk()
+        let freed = moved.reduce(0) { $0 + $1.size }
+        store.record(.files, "Similar to \(group.best.name)", freed: freed)
+        store.message = Store.Message(text: "\(moved.count) of \(others.count) images are in the Trash.", failed: moved.count < others.count)
+    }
+
+    private func drop(_ ids: Set<String>) {
+        similar = similar?.compactMap { group in
+            var group = group
+            group.files.removeAll { ids.contains($0.id) }
+            return group.files.count > 1 ? group : nil
         }
     }
 
@@ -663,6 +709,7 @@ final class Care {
         async let tcc = readPermissions()
         gatekeeper = await status.map { $0.output.contains("assessments enabled") }
         permissions = await tcc
+        await loadBrowserTraces()
         await withTaskGroup(of: (String, Assessment).self) { group in
             for app in apps where assessments[app.id] == nil {
                 group.addTask {
@@ -672,6 +719,42 @@ final class Care {
             }
             for await (id, a) in group { assessments[id] = a }
         }
+    }
+
+    func loadBrowserTraces() async {
+        let home = NSHomeDirectory()
+        browserTraces = await Task.detached(priority: .utility) { BrowserPrivacy.find(home: home) }.value
+    }
+
+    func isRunning(_ bundleID: String) -> Bool {
+        NSWorkspace.shared.runningApplications.contains { $0.bundleIdentifier == bundleID }
+    }
+
+    /// Deletes one browser's history, cookies or cache, only while that
+    /// browser is closed: an open one holds the databases and writes them back.
+    func clearBrowser(_ trace: BrowserTrace) async {
+        guard store.busy == nil else { return }
+        guard !isRunning(trace.bundleID) else {
+            store.message = Store.Message(text: "Quit \(trace.browser) first, then clear its \(trace.kind.lowercased()).", failed: true)
+            return
+        }
+        let effect = switch trace.kind {
+        case BrowserPrivacy.cookies: "You will be signed out of websites in \(trace.browser)."
+        case BrowserPrivacy.history: "\(trace.browser) forgets the pages you visited; bookmarks and passwords stay."
+        default: "\(trace.browser) downloads pages again as you visit them."
+        }
+        guard Alerts.confirm("Clear \(trace.browser)'s \(trace.kind.lowercased())?",
+                             "This deletes \(trace.paths.count) items, \(Store.bytes(trace.size)).\n\n" + effect,
+                             button: "Clear") else { return }
+        store.busy = "Clearing \(trace.browser) \(trace.kind.lowercased())"
+        defer { store.busy = nil }
+        let stuck = await Task.detached { BrowserPrivacy.clear(trace) }.value
+        await loadBrowserTraces()
+        let left = browserTraces?.first { $0.id == trace.id }?.size ?? 0
+        store.record(.privacy, "\(trace.browser) \(trace.kind)", freed: max(trace.size - left, 0))
+        monitor.readDisk()
+        store.message = Store.Message(text: "\(trace.browser) \(trace.kind.lowercased()) cleared" + (stuck > 0 ? "; \(stuck) items stayed." : "."),
+                                      failed: stuck > 0)
     }
 
     /// What runs with the session, as Background Task Management keeps it.

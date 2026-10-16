@@ -18,6 +18,11 @@ concrete next tasks are in [TODO.md](../TODO.md).
   tunes the Mac.
 - The MCP server and the Claude Code plugin, with adapters for other agents.
 - The toolbox section of the manual: a page per tool in the reference setup.
+- ZC Care: Similar Images in My Clutter, and browser privacy data.
+- ZCBar shipped as a cask with each release.
+- Phase 2, Linux: systemd units and timers, gsettings and keyd, with CI
+  applying a config on Ubuntu LTS and Fedora.
+- Per-system setup pages and a generated command reference.
 
 ## Now: the first release
 
@@ -27,16 +32,13 @@ concrete next tasks are in [TODO.md](../TODO.md).
 
 ## Next
 
-- ZC Care: Similar Images in My Clutter, and browser privacy data.
-- ZCBar signed with a Developer ID and notarised, and shipped as a cask.
-- Phase 2, Linux: systemd timers, gsettings and keyd, tested on Ubuntu LTS
-  and Fedora.
-- Phase 3, native Windows: registry settings, Task Scheduler, PowerShell,
-  WezTerm.
+- ZCBar signed with a Developer ID and notarised.
+- Phase 3, native Windows: the registry, Task Scheduler, a PowerShell profile
+  and WezTerm are built; the phase is done once the Windows CI job that
+  applies a config passes.
 
 ## Later
 
-- Per-system getting started pages and a generated command reference.
 - Phase 4: retire aurora-mac.
 
 ## Not planned

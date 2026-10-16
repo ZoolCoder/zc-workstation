@@ -8,11 +8,14 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
+	"strings"
 
 	"github.com/zoolcoder/toolshell/doctor"
 	"github.com/zoolcoder/zc-workstation/internal/config"
 	"github.com/zoolcoder/zc-workstation/internal/engine"
+	"github.com/zoolcoder/zc-workstation/internal/provider/tools"
 	"github.com/zoolcoder/zc-workstation/internal/security"
 	"github.com/zoolcoder/zc-workstation/internal/sh"
 )
@@ -58,18 +61,73 @@ func runDoctor(args []string, _ io.Reader, stdout, stderr io.Writer) error {
 				}
 			}
 		}
+		addShadows(r, cfg)
 	}
 	if runtime.GOOS == "darwin" {
 		for _, res := range security.New(sh.System()).Run(context.Background()) {
-			// A weak setting is the owner's call, not a broken install, so it warns.
-			if res.OK {
-				r.Add("security "+res.Name, doctor.OK, "")
-			} else {
-				r.Add("security "+res.Name, doctor.Warn, res.Detail)
-			}
+			addSecurity(r, "security ", res)
 		}
 	}
+	// Keys, commits, shell history and AI configs live in the home folder on
+	// every system, so these run everywhere.
+	user := security.NewUser(sh.System())
+	for _, res := range user.Account(context.Background()) {
+		addSecurity(r, "security ", res)
+	}
+	for _, res := range user.AI() {
+		addSecurity(r, "ai ", res)
+	}
 	return r.Write(stdout, *asJSON)
+}
+
+// addShadows checks that the shell runs each tools target's commands from
+// mise, not from a copy earlier on PATH such as Homebrew's.
+func addShadows(r *doctor.Report, cfg config.Config) {
+	runner := sh.System()
+	if !runner.Has("mise") {
+		return
+	}
+	for _, t := range cfg.Targets {
+		if t.Provider != "tools" || !t.ForOS(runtime.GOOS) {
+			continue
+		}
+		shadows, err := tools.Shadowed(context.Background(), runner, filepath.Dir(cfg.Resolve(t).File), exec.LookPath)
+		check := "path " + t.Name
+		switch {
+		case err != nil:
+			r.Add(check, doctor.Warn, "mise bin-paths: "+err.Error())
+		case len(shadows) == 0:
+			r.Add(check, doctor.OK, "every mise command runs from mise")
+		default:
+			r.Add(check, doctor.Warn, shadowDetail(shadows))
+		}
+	}
+}
+
+// shadowDetail names the first few shadowed commands and the fix.
+func shadowDetail(shadows []tools.Shadow) string {
+	var names []string
+	for _, s := range shadows[:min(len(shadows), 3)] {
+		if s.Got == "" {
+			names = append(names, s.Name+" is not on PATH")
+		} else {
+			names = append(names, s.Name+" runs "+s.Got)
+		}
+	}
+	if more := len(shadows) - len(names); more > 0 {
+		names = append(names, fmt.Sprintf("%d more", more))
+	}
+	return strings.Join(names, ", ") + `; activate mise last in the shell profile, after anything else that adds to PATH, such as eval "$(mise activate zsh)"`
+}
+
+// addSecurity reports a check. A weak setting is the owner's call, not a
+// broken install, so it warns.
+func addSecurity(r *doctor.Report, prefix string, res security.Result) {
+	if res.OK {
+		r.Add(prefix+res.Name, doctor.OK, "")
+	} else {
+		r.Add(prefix+res.Name, doctor.Warn, res.Detail)
+	}
 }
 
 func writeJSON(w io.Writer, v any) error {

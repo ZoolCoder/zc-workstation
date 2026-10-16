@@ -1,0 +1,110 @@
+= A Linux machine
+:description: Set up Ubuntu, Debian or Fedora with zc-workstation: apt or dnf packages, dotfiles, runtimes, systemd user units and GNOME settings.
+
+zc-workstation runs the same way on Linux as on macOS: one config, a plan, an
+apply. The packages come from apt or dnf, background jobs are systemd user
+units, and GNOME settings are `gsettings` keys. CI applies a config in fresh
+Ubuntu 24.04 and Fedora 42 containers before each release, then checks that
+nothing is left and `doctor` passes.
+
+== Before the first plan
+
+Install what zc-workstation drives. On a fresh install with no package lists
+yet, apply runs `sudo apt-get update` before the first apt install.
+
+[tabs]
+====
+Ubuntu and Debian::
++
+[source,console]
+----
+$ sudo apt-get update
+$ sudo apt-get install -y curl git
+$ sh -c "$(curl -fsLS get.chezmoi.io)" -- -b ~/.local/bin
+$ curl https://mise.run | sh
+----
+
+Fedora::
++
+[source,console]
+----
+$ sudo dnf install -y chezmoi git
+$ curl https://mise.run | sh
+----
+====
+
+Install zc-workstation from the release's `.deb` or `.rpm`, or with `go
+install`, as xref:getting-started.adoc#_install_zc_workstation[Getting started]
+shows.
+
+== A config for Linux
+
+Give each Linux-only target `os: [linux]`, so the same config also drives
+your Mac. Targets without `os`, such as dotfiles and runtimes, run
+everywhere.
+
+[source,yaml]
+----
+version: 1
+targets:
+  - name: apt
+    provider: packages
+    os: [linux]
+    manager: apt            # or dnf on Fedora
+    file: apt.txt
+  - name: home
+    provider: dotfiles
+    source: home
+  - name: runtimes
+    provider: tools
+    file: mise.toml
+  - name: jobs
+    provider: services
+    os: [linux]
+    agents: [~/.config/systemd/user/backup.timer]
+  - name: gnome
+    provider: settings
+    os: [linux]
+    gsettings:
+      org.gnome.desktop.interface:
+        color-scheme: prefer-dark
+  - name: keys
+    provider: keyboard
+    os: [linux]
+    file: keyd.conf
+----
+
+`apt.txt` and `dnf.txt` hold one package per line, as the manager names
+them. `zc-workstation capture -target apt` writes the file from what the
+machine has.
+
+* *Packages* install with `sudo apt-get install -y` or `sudo dnf install -y`.
+  They run attached to your terminal, so sudo asks for your password.
+* *Services* enables each unit with `systemctl --user enable --now` after a
+  `daemon-reload`. Write the unit files with the dotfiles target, which
+  comes first.
+* *Settings* writes each key with `gsettings set`. GNOME applies it at once.
+  A light theme is `color-scheme: prefer-light` with `gtk-theme: Adwaita`.
+* *Keyboard* installs a keyd config with sudo and enables keyd. Start from
+  `assets/keyd/default.conf`: Caps Lock is Escape on tap, Hyper on hold.
+
+xref:providers.adoc[Providers] has every key for each provider.
+
+== Plan, apply, check
+
+[source,console]
+----
+$ zc-workstation plan -out plan.json
+$ zc-workstation apply plan.json
+$ zc-workstation doctor
+----
+
+`doctor` lists each program a target needs, so a missing `dnf` on an Ubuntu
+machine shows as a failing check: keep one packages target per manager, or
+give each its own config.
+
+== Not on Linux yet
+
+The `desktop` provider (wallpaper, screen saver, accent colour) and the
+`defaults` keys of `settings` are macOS only. ZCBar and ZC Care are macOS
+apps. The xref:roadmap.adoc[roadmap] tracks what comes next.

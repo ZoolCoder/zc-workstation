@@ -1,1 +1,14 @@
 LICENSE-catppuccin
+{{ if ne .chezmoi.os "windows" }}
+.config/zoolcoder/theme.ps1
+{{ else }}
+# macOS and Unix only: the bar, the window borders, Ghostty, tmux and the zsh theme.
+Library
+.config/sketchybar
+.config/borders
+.config/ghostty
+.config/tmux
+.config/zoolcoder/theme.zsh
+.zshrc.local
+bat-cache.sh
+{{ end }}

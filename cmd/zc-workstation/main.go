@@ -52,6 +52,10 @@ Usage:
   ` + name + ` capture  -target t      write t's manifest from what this machine has
   ` + name + ` validate [flags]        check the config offline
   ` + name + ` doctor   [-json]        health: system, config, programs, targets
+  ` + name + ` upgrade  [flags]        save what is outdated, then upgrade it
+  ` + name + ` history  [-n 20] [-json] what was applied, newest first
+  ` + name + ` drift    [-last] [-json] count what differs from the config, and save it;
+                                 -plist prints a launchd agent that runs it daily
 `
 
 const usageTail = `  ` + name + ` version
@@ -129,6 +133,12 @@ func runCLI(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 		return err
 	case "doctor":
 		return runDoctor(args, stdin, stdout, stderr)
+	case "upgrade":
+		return runUpgrade(args, stdin, stdout, stderr)
+	case "history":
+		return runHistory(args, stdin, stdout, stderr)
+	case "drift":
+		return runDrift(args, stdin, stdout, stderr)
 	case "plan", "apply", "status", "list", "capture", "validate":
 	default:
 		if run, ok := optional[cmd]; ok {
@@ -151,6 +161,9 @@ func runCLI(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	kinds := flags.String("kind", "", "list: only these kinds")
 	adoc := flags.Bool("adoc", false, "list: the declared packages and runtimes as an AsciiDoc page")
 	upgrade := flags.Bool("upgrade", false, "also upgrade outdated packages and runtimes")
+	// Not in the usage text: the MCP server sets it, so history tells an
+	// agent's apply from one typed at a terminal.
+	via := flags.String("via", "the terminal", "apply: who asked, for the history")
 	var targets, only targetList
 	flags.Var(&targets, "target", "limit to this target")
 	flags.Var(&only, "only", "only the change to this resource")
@@ -247,7 +260,9 @@ func runCLI(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 		}
 	}
 	fmt.Fprintln(stdout)
-	return eng.Apply(ctx, p, stdout)
+	err = eng.Apply(ctx, p, stdout)
+	recordApply(p, *via, err)
+	return err
 }
 
 // upgradeAll makes every target that can upgrade do so, as if its config said

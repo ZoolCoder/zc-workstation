@@ -1,0 +1,9 @@
+# The config CI applies, then checks with doctor, in a Ubuntu container.
+version: 1
+
+targets:
+  - name: apt
+    provider: packages
+    os: [linux]
+    manager: apt
+    file: ../../example/apt.txt

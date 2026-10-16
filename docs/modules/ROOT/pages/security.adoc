@@ -21,6 +21,28 @@
   and their output is captured, never written to the protocol stream.
 * *The dashboard stays local.* Loopback only, `Host` checked against DNS
   rebinding, cross-site writes refused, strict CSP.
+* *An agent's plan goes stale.* The MCP server refuses a saved plan older
+  than an hour, and writes every tool call to `mcp-audit.jsonl` in its state
+  folder. Every apply, from the terminal, the dashboard or an agent, lands in
+  `zc-workstation history`.
+
+== What doctor checks
+
+`zc-workstation doctor` reads, and changes nothing. A weak setting is a
+warning, not a failure: the choice is yours.
+
+* *macOS:* FileVault, the firewall and stealth mode, a password after sleep,
+  Gatekeeper, System Integrity Protection, automatic updates, File Sharing,
+  Remote Login, Screen Sharing, automatic login, AirDrop open to everyone,
+  Touch ID for `sudo`, and servers listening on every interface.
+* *Every system:* SSH private keys without a passphrase, git commits left
+  unsigned, and secrets in the shell history. `gitleaks` scans
+  `~/.zsh_history`, `~/.bash_history`, the fish history and Atuin's, with
+  `--redact`: the report names the rule and the count, never the secret.
+* *AI agents:* API keys written in plain text in the MCP configs of Claude
+  Code, Claude Desktop, Cursor, Gemini, Windsurf and Codex; MCP servers that
+  `npx`, `bunx` or `uvx` start without a version; Claude Code rules that allow
+  any shell command, and `bypassPermissions`.
 
 == What it does not
 
@@ -34,6 +56,37 @@
   dialog is a script in the user cache folder; the password goes straight to
   `sudo` and is never stored or seen by an agent.
 * *An attacker who already has your shell.*
+
+== Verifying a release
+
+Each release is built by GitHub Actions from its tag. `checksums.txt` lists
+every archive and package, carries a keyless cosign signature, and each file
+has SLSA build provenance and an SPDX SBOM.
+
+. Check the signature on the checksums. It proves the release workflow of
+  this repository signed them:
++
+[source,sh]
+----
+cosign verify-blob checksums.txt \
+  --signature checksums.txt.sig --certificate checksums.txt.pem \
+  --certificate-identity-regexp '^https://github.com/zoolcoder/zc-workstation/.github/workflows/release.yml@refs/tags/v' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com
+----
+. Check the file you downloaded against the checksums:
++
+[source,sh]
+----
+shasum -a 256 --ignore-missing -c checksums.txt
+----
+. Check its provenance, which names the commit and workflow that built it:
++
+[source,sh]
+----
+gh attestation verify zc-workstation_darwin_arm64.tar.gz --repo zoolcoder/zc-workstation
+----
+
+The SBOM, `<archive>.sbom.json`, lists the Go modules built into each binary.
 
 Report a problem through the repository's security policy, never a public
 issue.

@@ -1,6 +1,6 @@
 // Draws ZCBar's icons from the ZoolCoder mark, icon/mark.svg (a copy of
-// website-zoolcoder's public/logo/mark.svg): AppIcon.icns, the mark on a
-// violet squircle, and MenuBarMark.pdf, a template for the menu bar.
+// website-zoolcoder's public/logo/mark.svg): AppIcon.icns, the mark on an
+// electric blue squircle, and MenuBarMark.pdf, a template for the menu bar.
 // Usage: swift icon/make-icon.swift OUT_DIR; `make app-icon` runs it.
 import AppKit
 
@@ -84,17 +84,17 @@ func appIcon(_ px: Int) -> CGImage {
     ctx.saveGState()
     ctx.setShadow(offset: CGSize(width: 0, height: -10), blur: 24, color: color(0x000000, 0.35))
     ctx.addPath(shape)
-    ctx.setFillColor(color(0x24124F))
+    ctx.setFillColor(color(0x0B1E5C))
     ctx.fillPath()
     ctx.restoreGState()
 
     ctx.saveGState()
     ctx.addPath(shape)
     ctx.clip()
-    let violet = CGGradient(colorsSpace: nil, colors: [color(0x7A5CF0), color(0x4A2BB0), color(0x1E1046)] as CFArray,
-                            locations: [0, 0.55, 1])!
-    ctx.drawLinearGradient(violet, start: CGPoint(x: 200, y: 924), end: CGPoint(x: 824, y: 100), options: [])
-    let glow = CGGradient(colorsSpace: nil, colors: [color(0x5AD8FF, 0.35), color(0x5AD8FF, 0)] as CFArray,
+    let blue = CGGradient(colorsSpace: nil, colors: [color(0x3D7BFF), color(0x2457E6), color(0x0B1E5C)] as CFArray,
+                          locations: [0, 0.5, 1])!
+    ctx.drawLinearGradient(blue, start: CGPoint(x: 200, y: 924), end: CGPoint(x: 824, y: 100), options: [])
+    let glow = CGGradient(colorsSpace: nil, colors: [color(0x9CC3FF, 0.40), color(0x9CC3FF, 0)] as CFArray,
                           locations: [0, 1])!
     ctx.drawRadialGradient(glow, startCenter: CGPoint(x: 330, y: 800), startRadius: 0,
                            endCenter: CGPoint(x: 330, y: 800), endRadius: 520, options: [])
@@ -105,9 +105,9 @@ func appIcon(_ px: Int) -> CGImage {
     ctx.strokePath()
     ctx.restoreGState()
 
-    ctx.setShadow(offset: CGSize(width: 0, height: -8), blur: 20, color: color(0x0B0520, 0.45))
+    ctx.setShadow(offset: CGSize(width: 0, height: -8), blur: 20, color: color(0x05060A, 0.45))
     drawMark(ctx, in: CGRect(x: 222, y: 222, width: 580, height: 580),
-             colors: [color(0xF3F5F7), color(0x9CC3FF)])
+             colors: [color(0xF3F5F7), color(0xA9C8FF)])
     return ctx.makeImage()!
 }
 

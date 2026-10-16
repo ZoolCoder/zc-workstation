@@ -3,6 +3,8 @@
 * xref:getting-started.adoc[Getting started]
 * xref:configuration.adoc[Writing a config]
 * xref:new-machine.adoc[A new Mac in one command]
+* xref:linux.adoc[A Linux machine]
+* xref:windows.adoc[A Windows machine]
 
 .Use it
 * xref:providers.adoc[Providers]
@@ -25,7 +27,11 @@
 ** xref:toolbox/eza.adoc[eza]
 ** xref:toolbox/bat.adoc[bat]
 ** xref:toolbox/fd-ripgrep.adoc[fd and ripgrep]
+** xref:toolbox/jq-yq.adoc[jq and yq]
 ** xref:toolbox/yazi.adoc[Yazi]
+** xref:toolbox/media.adoc[Media tools]
+** xref:toolbox/cli-helpers.adoc[just, xh and helpers]
+** xref:toolbox/keys-mail.adoc[GnuPG, oathtool, mailctl]
 * Git and GitHub
 ** xref:toolbox/git-tools.adoc[git and diff tools]
 ** xref:toolbox/lazygit.adoc[lazygit]
@@ -35,9 +41,12 @@
 ** xref:toolbox/mise.adoc[mise]
 ** xref:toolbox/chezmoi.adoc[chezmoi]
 ** xref:toolbox/direnv.adoc[direnv]
+** xref:toolbox/go.adoc[Go tools]
+** xref:toolbox/languages.adoc[Language servers]
 * Containers and data
 ** xref:toolbox/containers.adoc[Colima and Docker]
 ** xref:toolbox/postgresql.adoc[PostgreSQL]
+** xref:toolbox/cloud.adoc[Cloud CLIs]
 * Desktop
 ** xref:toolbox/sketchybar.adoc[SketchyBar]
 ** xref:toolbox/karabiner.adoc[Karabiner and Hyper]

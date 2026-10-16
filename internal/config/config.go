@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -21,7 +22,7 @@ const Version = 1
 
 // Providers lists the provider names a target may use. A new provider adds
 // its name here and its package under internal/provider.
-var Providers = []string{"localdir", "packages", "dotfiles", "tools", "desktop", "settings", "services"}
+var Providers = []string{"localdir", "packages", "dotfiles", "tools", "desktop", "settings", "services", "agents", "keyboard"}
 
 // Systems are the values of a target's os list, as Go names them.
 var Systems = []string{"darwin", "linux", "windows"}
@@ -48,8 +49,8 @@ type Target struct {
 	Provider string `yaml:"provider"`
 	// OS limits the target to these systems; empty means every system.
 	OS []string `yaml:"os"`
-	// File is the manifest: a Brewfile, a package list, a winget import file
-	// or a mise config.
+	// File is the manifest: a Brewfile, a package list, a winget import file,
+	// a mise config or an agents file.
 	File string `yaml:"file"`
 	// Manager is the package manager for File; empty picks this system's.
 	Manager string `yaml:"manager"`
@@ -80,9 +81,20 @@ type Target struct {
 	// NSGlobalDomain, to the keys the settings provider keeps and their
 	// values: a bool, an integer, a number or a string.
 	Defaults map[string]map[string]any `yaml:"defaults"`
+	// Gsettings maps a GNOME schema, such as org.gnome.desktop.interface, to
+	// the keys the settings provider keeps on Linux: a bool, a number, a
+	// string or a list of strings.
+	Gsettings map[string]map[string]any `yaml:"gsettings"`
+	// Registry maps a Windows registry key under HKCU, such as
+	// HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize, to
+	// the values the settings provider keeps: a bool or an integer, stored as
+	// a DWORD, or a string.
+	Registry map[string]map[string]any `yaml:"registry"`
 	// Services are the Homebrew services the services provider keeps running.
 	Services []string `yaml:"services"`
-	// Agents are launchd agent plists the services provider keeps loaded.
+	// Agents are launchd agent plists, on Linux systemd user units and
+	// timers, and on Windows Task Scheduler task files (.xml), the services
+	// provider keeps loaded.
 	Agents []string `yaml:"agents"`
 }
 
@@ -257,7 +269,7 @@ func (t Target) validateFields(where string) []error {
 		if t.Mode != "" && t.Mode != "file" && t.Mode != "symlink" {
 			errs = append(errs, fmt.Errorf("%s: mode %q is not file or symlink", where, t.Mode))
 		}
-	case "tools":
+	case "tools", "agents", "keyboard":
 		need("file", t.File)
 	case "desktop":
 		if t.Wallpaper == "" && t.Screensaver == "" && t.Accent == "" {
@@ -267,8 +279,19 @@ func (t Target) validateFields(where string) []error {
 			errs = append(errs, fmt.Errorf("%s: accent %q is not one of %s", where, t.Accent, strings.Join(Accents, ", ")))
 		}
 	case "settings":
-		if len(t.Defaults) == 0 {
-			errs = append(errs, fmt.Errorf("%s: defaults is required for provider settings", where))
+		// Each system reads its own map; the others do nothing there.
+		set := map[string]bool{"defaults": len(t.Defaults) > 0, "gsettings": len(t.Gsettings) > 0, "registry": len(t.Registry) > 0}
+		own := map[string]string{"darwin": "defaults", "linux": "gsettings", "windows": "registry"}
+		if len(t.OS) != 1 || own[t.OS[0]] == "" {
+			errs = append(errs, fmt.Errorf("%s: provider settings drives one system; set os: [darwin], os: [linux] or os: [windows]", where))
+			break
+		}
+		for _, field := range slices.Sorted(maps.Keys(set)) {
+			if field != own[t.OS[0]] {
+				unused(field, set[field])
+			} else if !set[field] {
+				errs = append(errs, fmt.Errorf("%s: %s is required for provider settings on %s", where, field, t.OS[0]))
+			}
 		}
 		for domain, keys := range t.Defaults {
 			for name, v := range keys {
@@ -279,18 +302,56 @@ func (t Target) validateFields(where string) []error {
 				}
 			}
 		}
+		for schema, keys := range t.Gsettings {
+			for name, v := range keys {
+				if !gvariantValue(v) {
+					errs = append(errs, fmt.Errorf("%s: %s %s must be a bool, number, string or list of strings", where, schema, name))
+				}
+			}
+		}
+		for key, values := range t.Registry {
+			if !UserKey(key) {
+				errs = append(errs, fmt.Errorf(`%s: registry key %s must be under HKCU\: only the user's own settings, which need no administrator`, where, key))
+			}
+			for name, v := range values {
+				switch v.(type) {
+				case bool, int, string:
+				default:
+					errs = append(errs, fmt.Errorf("%s: %s %s must be a bool, integer or string", where, key, name))
+				}
+			}
+		}
 	case "services":
 		if len(t.Services) == 0 && len(t.Agents) == 0 {
 			errs = append(errs, fmt.Errorf("%s: set services or agents for provider services", where))
 		}
+		linux, windows := slices.Equal(t.OS, []string{"linux"}), slices.Equal(t.OS, []string{"windows"})
+		if !linux && !windows && !slices.Equal(t.OS, []string{"darwin"}) {
+			errs = append(errs, fmt.Errorf("%s: provider services drives one system; set os: [darwin], os: [linux] or os: [windows]", where))
+		}
+		if windows && len(t.Services) > 0 {
+			errs = append(errs, fmt.Errorf("%s: services are Homebrew services; Windows takes Task Scheduler tasks under agents", where))
+		}
 		for _, a := range t.Agents {
-			if filepath.Ext(a) != ".plist" {
-				errs = append(errs, fmt.Errorf("%s: agent %q must be a .plist file", where, a))
+			switch ext := filepath.Ext(a); {
+			case ext != ".plist" && ext != ".service" && ext != ".timer" && ext != ".xml":
+				errs = append(errs, fmt.Errorf("%s: agent %q must be a .plist, .service, .timer or .xml file", where, a))
+			case windows && ext != ".xml":
+				errs = append(errs, fmt.Errorf("%s: agent %q is not a task; Windows takes Task Scheduler .xml files", where, a))
+			case !windows && ext == ".xml":
+				errs = append(errs, fmt.Errorf("%s: agent %q is a Task Scheduler task; set os: [windows]", where, a))
+			case linux && ext == ".plist":
+				errs = append(errs, fmt.Errorf("%s: agent %q is a launchd plist; Linux takes .service and .timer units", where, a))
+			case !linux && !windows && ext != ".plist":
+				errs = append(errs, fmt.Errorf("%s: agent %q is a systemd unit; macOS takes .plist files", where, a))
 			}
 		}
 	}
-	if (t.Provider == "desktop" || t.Provider == "settings" || t.Provider == "services") && !slices.Equal(t.OS, []string{"darwin"}) {
+	if t.Provider == "desktop" && !slices.Equal(t.OS, []string{"darwin"}) {
 		errs = append(errs, fmt.Errorf("%s: provider %s drives macOS only; set os: [darwin]", where, t.Provider))
+	}
+	if t.Provider == "keyboard" && !slices.Equal(t.OS, []string{"linux"}) {
+		errs = append(errs, fmt.Errorf("%s: provider keyboard drives keyd on Linux only; set os: [linux]", where))
 	}
 	if t.Provider != "localdir" {
 		unused("path", t.Path != "")
@@ -308,7 +369,7 @@ func (t Target) validateFields(where string) []error {
 		unused("destination", t.Destination != "")
 		unused("mode", t.Mode != "")
 	}
-	if t.Provider != "packages" && t.Provider != "tools" {
+	if !slices.Contains([]string{"packages", "tools", "agents", "keyboard"}, t.Provider) {
 		unused("file", t.File != "")
 	}
 	if t.Provider != "desktop" {
@@ -318,10 +379,35 @@ func (t Target) validateFields(where string) []error {
 	}
 	if t.Provider != "settings" {
 		unused("defaults", len(t.Defaults) > 0)
+		unused("gsettings", len(t.Gsettings) > 0)
+		unused("registry", len(t.Registry) > 0)
 	}
 	if t.Provider != "services" {
 		unused("services", len(t.Services) > 0)
 		unused("agents", len(t.Agents) > 0)
 	}
 	return errs
+}
+
+// UserKey reports whether a registry key is under HKEY_CURRENT_USER.
+func UserKey(key string) bool {
+	root, _, _ := strings.Cut(key, `\`)
+	return strings.EqualFold(root, "HKCU") || strings.EqualFold(root, "HKEY_CURRENT_USER")
+}
+
+// gvariantValue reports whether v is a value gsettings can be given: a bool,
+// a number, a string or a list of strings.
+func gvariantValue(v any) bool {
+	switch v := v.(type) {
+	case bool, int, float64, string:
+		return true
+	case []any:
+		for _, it := range v {
+			if _, ok := it.(string); !ok {
+				return false
+			}
+		}
+		return true
+	}
+	return false
 }

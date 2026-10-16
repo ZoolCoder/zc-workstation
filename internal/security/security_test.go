@@ -20,7 +20,9 @@ func secure() map[string]string {
 		"csrutil status":                                 "System Integrity Protection status: enabled.\n",
 		"softwareupdate --schedule":                      "Automatic checking for updates is turned on\n",
 		"/bin/sh -c defaults read /Library/Preferences/com.apple.SoftwareUpdate CriticalUpdateInstall; defaults read /Library/Preferences/com.apple.SoftwareUpdate ConfigDataInstall": "1\n1\n",
-		"netstat -an -p tcp":          "tcp4  0  0  127.0.0.1.5432  *.*  LISTEN\n",
+		"netstat -an -p tcp": "tcp4  0  0  127.0.0.1.5432  *.*  LISTEN\n",
+		"/bin/sh -c defaults read /Library/Preferences/com.apple.loginwindow autoLoginUser 2>/dev/null; true": "",
+		"/bin/sh -c defaults read com.apple.sharingd DiscoverableMode 2>/dev/null; true":                      "Contacts Only\n",
 		"lsof -nP -iTCP -sTCP:LISTEN": "COMMAND PID USER FD TYPE DEVICE SIZE/OFF NODE NAME\nrapportd 1 me 4u IPv4 0x1 0t0 TCP *:49152 (LISTEN)\npostgres 2 me 7u IPv4 0x2 0t0 TCP 127.0.0.1:5432 (LISTEN)\n",
 	}
 }
@@ -47,20 +49,24 @@ func TestOpenMacFailsWithFixes(t *testing.T) {
 	// "disabled" contains "enabled"; the check must not read it as on.
 	out[firewall+" --getglobalstate"] = "Firewall is disabled. (State = 0)\n"
 	out["/bin/sh -c sysadminctl -screenLock status 2>&1"] = "sysadminctl[1] screenLock is off\n"
-	out["netstat -an -p tcp"] = "tcp4  0  0  *.445  *.*  LISTEN\n"
+	out["netstat -an -p tcp"] = "tcp4  0  0  *.445  *.*  LISTEN\ntcp6  0  0  *.22  *.*  LISTEN\n"
+	out["/bin/sh -c defaults read com.apple.sharingd DiscoverableMode 2>/dev/null; true"] = "Everyone\n"
 	out["lsof -nP -iTCP -sTCP:LISTEN"] += "node 3 me 20u IPv6 0x3 0t0 TCP *:3000 (LISTEN)\n"
 	delete(out, "csrutil status")
 	got := map[string]Result{}
 	for _, r := range checker(t, out, "#auth       sufficient     pam_tid.so\n").Run(context.Background()) {
 		got[r.Name] = r
 	}
-	for _, name := range []string{"firewall", "password after sleep or screen saver", "File Sharing off", "System Integrity Protection", "Touch ID for sudo"} {
+	for _, name := range []string{"firewall", "password after sleep or screen saver", "File Sharing off", "Remote Login off", "AirDrop not open to everyone", "System Integrity Protection", "Touch ID for sudo"} {
 		if r := got[name]; r.OK || r.Warn || r.Detail == "" {
 			t.Errorf("%s: %+v, want a failure with a fix", name, r)
 		}
 	}
 	if r := got["servers on every network interface"]; !r.Warn || r.Detail != "node:3000; bind dev servers to 127.0.0.1" {
 		t.Errorf("exposed: %+v", r)
+	}
+	if !got["Screen Sharing off"].OK || !got["automatic login off"].OK {
+		t.Error("Screen Sharing and automatic login should still pass")
 	}
 	if !got["FileVault disk encryption"].OK {
 		t.Error("FileVault should still pass")

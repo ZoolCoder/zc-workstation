@@ -69,12 +69,25 @@ targets:
       com.apple.dock:
         autohide: true
 
+  # keyboard installs a keyd config on Linux: Caps Lock is Escape on tap and
+  # Hyper on hold. keyd itself comes from your packages.
+  - name: keys
+    provider: keyboard
+    os: [linux]
+    file: assets/keyd/default.conf
+
   # services keeps Homebrew services running and launchd agents loaded.
   - name: services
     provider: services
     os: [darwin]
     services: [colima]
     # agents: [~/Library/LaunchAgents/local.backup.plist]
+
+  # ai declares the MCP servers, rules, skills and Ollama models every AI
+  # agent gets: Claude Code, Codex, Cursor and Gemini CLI.
+  # - name: ai
+  #   provider: agents
+  #   file: agents.yaml
 
   # theme is a second chezmoi source: the ZoolCoder colours for Ghostty, tmux,
   # starship, SketchyBar, JankyBorders, bat, btop, eza, yazi, lazygit and

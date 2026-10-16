@@ -534,7 +534,7 @@ servers; that is Ansible's job.
 ```text
 cmd/zc-workstation/   the CLI: plan, apply, list, add, remove, capture, doctor, ui, mcp
 internal/engine/      config + providers -> one plan; apply, then plan again to verify
-internal/provider/    packages, dotfiles, tools, settings, services, desktop, localdir
+internal/provider/    packages, dotfiles, tools, settings, services, desktop, keyboard, agents, localdir
 internal/plan/        actions, saved plans and their freshness check
 internal/config/      the YAML config and its validation
 internal/ui/          the local dashboard
@@ -551,8 +551,8 @@ bootstrap.sh          a new Mac in one command
 | Platform | State |
 |---|---|
 | macOS | Complete. It replaced an ~850-line shell setup. |
-| Linux | Supported: apt and dnf packages, dotfiles, runtimes. Next: systemd timers, gsettings. |
-| Windows | Supported: winget, dotfiles, runtimes. Next: registry settings, Task Scheduler. |
+| Linux | Supported: apt and dnf packages, dotfiles, runtimes, gsettings, systemd user units and timers, keyd. |
+| Windows | Supported: winget, dotfiles, runtimes, registry settings, Task Scheduler, a PowerShell profile and WezTerm. |
 
 Next up is the first release, `v0.1.0`. After it come Similar Images in
 ZC Care, a notarised ZCBar, and the Linux and Windows phases. See the

@@ -24,6 +24,16 @@ Nothing changes until you approve it.
 
 ## Install
 
+From the Homebrew tap, with the CLI it needs:
+
+```console
+$ brew tap zoolcoder/zc-workstation https://github.com/zoolcoder/zc-workstation
+$ brew install --cask zcbar
+```
+
+The release build is signed ad hoc, so open it the first time with
+Control-click, Open. To build it yourself instead:
+
 ZCBar needs macOS 14 or later, Xcode or the Swift toolchain, and the
 `zc-workstation` CLI. From the repository root:
 
@@ -121,10 +131,10 @@ ZCBar sends it the count of open items for its `zcbar` item.
 |---|---|
 | Smart Care | Scans everything at once: junk, clutter, updates, health. *Run* cleans up, then updates. |
 | Cleanup | Clears caches, logs, build output, npx packages and Mail downloads. Clears AI clutter: Claude Code temp files and old versions, and the caches and logs of Claude, Cursor, ChatGPT, Windsurf, Codex, Gemini CLI and Chrome DevTools MCP. Empties the Trash. |
-| Protection | Shows Gatekeeper's verdict per app, background apps and the privacy permissions apps hold. |
+| Protection | Shows Gatekeeper's verdict per app, background apps, the privacy permissions apps hold, and each browser's history, cookies and cache, cleared only while that browser is closed. |
 | Performance | Manages login items and runs maintenance: free RAM, flush DNS, thin Time Machine snapshots, reindex Spotlight, clean Homebrew, Docker and simulators. |
 | Applications | Uninstalls an app with what it keeps in the Library. *Adopt* replaces a hand-installed app with its Homebrew cask. Finds leftovers of removed apps. |
-| My Clutter | Finds large files, duplicates, old downloads and installers. |
+| My Clutter | Finds large files, duplicates, similar images (Vision keeps the one with the most pixels), old downloads and installers. |
 | Space Lens | Maps what fills your home folder. |
 | Developer | Finds `node_modules` and virtualenvs of projects untouched for 90 days, and local models from Ollama, LM Studio and Hugging Face. |
 | My Tools | Lists every tool as a searchable card, including *Screen Cleaning Mode*. |
@@ -168,8 +178,9 @@ outside what Cleanup clears.
 
 ### Permissions
 
-- **Full Disk Access** lets Protection read privacy permissions. An ad hoc
-  signed build is a new app to macOS, so each rebuild asks again.
+- **Full Disk Access** lets Protection read privacy permissions and browser
+  history and cookies. An ad hoc signed build is a new app to macOS, so each
+  rebuild asks again.
 - **Finder automation** lets Cleanup empty the Trash. It asks once.
 
 ## URLs

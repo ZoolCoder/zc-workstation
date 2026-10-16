@@ -32,6 +32,13 @@ sketchybar --add event zcbar_changed \
   --add item zcbar right --set zcbar icon=󰌢 script="$PLUGIN_DIR/zcbar.sh" click_script="open -g zcbar://panel" \
   --subscribe zcbar zcbar_changed system_woke
 
+# Drift against the zc-workstation config, saved each morning by
+# `zc-workstation drift`; shown only while something differs. A click plans.
+sketchybar --add event zc_workstation_drift \
+  --add item drift right --set drift icon=󰓦 drawing=off update_freq=1800 script="$PLUGIN_DIR/drift.sh" \
+    click_script="open -g zcbar://panel" \
+  --subscribe drift zc_workstation_drift system_woke
+
 # macOS posts this notification on every switch between light and dark mode.
 sketchybar --add event theme_changed AppleInterfaceThemeChangedNotification \
   --add item theme left --set theme drawing=off script="$PLUGIN_DIR/theme.sh" --subscribe theme theme_changed

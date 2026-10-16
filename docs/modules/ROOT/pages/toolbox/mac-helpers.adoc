@@ -10,6 +10,8 @@ Command-line helpers that make the Mac behave better for development.
 * **mkcert:** trusted HTTPS certificates for local development.
 * **terminal-notifier:** notifications from scripts, such as the weekly update.
 * **mas:** installs App Store apps from the Brewfile.
+* **fileicon:** sets a custom icon on a folder or an app from the command
+  line (`fileicon set ~/Developer icon.png`).
 * **A weekly update** launch agent runs `update` and notifies you.
 
 == See also

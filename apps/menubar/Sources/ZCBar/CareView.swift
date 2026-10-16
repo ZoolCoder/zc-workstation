@@ -817,6 +817,39 @@ private struct Clutter: View {
                             }
                         }
                     }
+                    Section("Similar Images") {
+                        if let groups = care.similar {
+                            if groups.isEmpty {
+                                Text("No two photos look alike.").foregroundStyle(.secondary).padding(10)
+                            }
+                            ForEach(groups) { group in
+                                VStack(alignment: .leading, spacing: 0) {
+                                    HStack {
+                                        Text("\(group.best.name) · \(group.files.count) look alike, \(Store.bytes(group.wasted)) to free")
+                                            .font(.callout.weight(.semibold))
+                                        Spacer()
+                                        Button("Trash Others") { care.trashOthers(group) }.controlSize(.small)
+                                    }
+                                    .padding(.horizontal, 10)
+                                    .padding(.top, 8)
+                                    ForEach(group.files) { file in
+                                        FileRow(care: care, file: file, showsFolder: true, flag: file == group.best ? "Best" : nil)
+                                    }
+                                }
+                            }
+                        }
+                        HStack {
+                            Text(care.scanningImages ? "Comparing photos in Pictures, Desktop, Downloads and Documents…"
+                                 : "Photos that look alike: bursts, edits and resaved copies. The one with the most pixels is kept.")
+                                .font(.caption).foregroundStyle(.secondary)
+                            Spacer()
+                            if care.scanningImages { ProgressView().controlSize(.small) }
+                            Button(care.similar == nil ? "Find Similar Images" : "Look Again") { Task { await care.scanImages() } }
+                                .controlSize(.small)
+                                .disabled(care.scanningImages)
+                        }
+                        .padding(10)
+                    }
                     Section("Old Downloads") {
                         if care.oldDownloads.isEmpty {
                             empty("Nothing in Downloads older than 30 days.")
@@ -847,13 +880,14 @@ private struct FileRow: View {
     let file: LargeFile
     var showsFolder = false
     var dateLabel = "modified"
+    var flag: String?
 
     var body: some View {
         let folder = (file.url.deletingLastPathComponent().path as NSString).abbreviatingWithTildeInPath
         Row(icon: Image(nsImage: NSWorkspace.shared.icon(forFile: file.url.path)).resizable().frame(width: 32, height: 32),
             title: showsFolder ? folder : file.name,
             detail: (showsFolder ? file.name : folder) + (file.modified.map { " · \(dateLabel) " + days($0) } ?? ""),
-            value: Store.bytes(file.size)) {
+            value: Store.bytes(file.size), flag: flag, flagColor: Theme.good) {
             Button { NSWorkspace.shared.activateFileViewerSelecting([file.url]) } label: {
                 Image(systemName: "magnifyingglass")
             }
@@ -891,16 +925,18 @@ private struct Row<Icon: View, Actions: View>: View {
     let detail: String
     let value: String
     var flag: String?
+    var flagColor = Theme.warning
     @ViewBuilder let actions: Actions
     @State private var over = false
 
-    init(icon: Icon, title: String, detail: String, value: String, flag: String? = nil,
+    init(icon: Icon, title: String, detail: String, value: String, flag: String? = nil, flagColor: Color = Theme.warning,
          @ViewBuilder actions: () -> Actions) {
         self.icon = icon
         self.title = title
         self.detail = detail
         self.value = value
         self.flag = flag
+        self.flagColor = flagColor
         self.actions = actions()
     }
 
@@ -913,8 +949,8 @@ private struct Row<Icon: View, Actions: View>: View {
                     if let flag {
                         Text(flag).font(.caption2.weight(.semibold))
                             .padding(.horizontal, 6).padding(.vertical, 2)
-                            .background(Capsule().fill(Theme.warning.opacity(0.25)))
-                            .foregroundStyle(Theme.warning)
+                            .background(Capsule().fill(flagColor.opacity(0.25)))
+                            .foregroundStyle(flagColor)
                     }
                 }
                 Text(detail).font(.caption).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
@@ -1317,6 +1353,28 @@ private struct Protection: View {
                         }
                         .padding(10)
                     }
+                    Section("Browser Privacy") {
+                        if let traces = care.browserTraces {
+                            if traces.isEmpty {
+                                Text("No browser keeps history, cookies or caches ZCBar can read.").foregroundStyle(.secondary).padding(10)
+                            }
+                            ForEach(traces) { trace in
+                                let open = care.isRunning(trace.bundleID)
+                                Row(icon: SymbolTile(symbol: symbol(trace.kind), colors: open ? Tint.gray : Tint.violet, size: 32),
+                                    title: "\(trace.browser) \(trace.kind)",
+                                    detail: open ? "Quit \(trace.browser) to clear it" : "\(trace.paths.count) items",
+                                    value: Store.bytes(trace.size)) {
+                                    Button("Clear") { Task { await care.clearBrowser(trace) } }
+                                        .controlSize(.small)
+                                        .disabled(open)
+                                }
+                            }
+                        } else {
+                            ProgressView().controlSize(.small).padding(10)
+                        }
+                        Text("Browsers keep history and cookies from apps without Full Disk Access; ZCBar lists what it can read. A browser clears only while it is closed.")
+                            .font(.caption).foregroundStyle(.secondary).padding(10)
+                    }
                     Section("Privacy Permissions") {
                         if let permissions = care.permissions {
                             if permissions.isEmpty {
@@ -1347,6 +1405,14 @@ private struct Protection: View {
             }
         }
         .task { if care.gatekeeper == nil { await care.loadProtection() } }
+    }
+
+    private func symbol(_ kind: String) -> String {
+        switch kind {
+        case BrowserPrivacy.history: "clock.arrow.circlepath"
+        case BrowserPrivacy.cookies: "birthday.cake.fill"
+        default: "internaldrive.fill"
+        }
     }
 
     private var subtitle: String {

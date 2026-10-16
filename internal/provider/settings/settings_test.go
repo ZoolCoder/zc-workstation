@@ -97,3 +97,120 @@ func TestSame(t *testing.T) {
 		}
 	}
 }
+
+func TestPlanSetsGnomeKeys(t *testing.T) {
+	get := func(schema, key string) string { return sh.Line("gsettings", "get", schema, key) }
+	r := &sh.Fake{Out: map[string]string{
+		get("org.gnome.desktop.interface", "color-scheme"):        "'default'\n",
+		get("org.gnome.desktop.interface", "text-scaling-factor"): "1.25\n",
+		get("org.gnome.desktop.peripherals.keyboard", "delay"):    "uint32 500\n",
+		get("org.gnome.shell", "favorite-apps"):                   "['firefox.desktop']\n",
+	}}
+	p := Provider{r: r, home: "/home/me"}
+	tg := config.Target{Name: "gnome", Provider: "settings", OS: []string{"linux"}, Gsettings: map[string]map[string]any{
+		"org.gnome.desktop.interface":            {"color-scheme": "prefer-dark", "text-scaling-factor": 1.25},
+		"org.gnome.desktop.peripherals.keyboard": {"delay": 500},
+		"org.gnome.shell":                        {"favorite-apps": []any{"firefox.desktop", "org.gnome.Terminal.desktop"}},
+	}}
+	actions, err := p.Plan(context.Background(), tg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, a := range actions {
+		if err := a.Do(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	ran := []string{
+		"gsettings set org.gnome.desktop.interface color-scheme 'prefer-dark'",
+		"gsettings set org.gnome.shell favorite-apps ['firefox.desktop', 'org.gnome.Terminal.desktop']",
+	}
+	if !slices.Equal(r.Ran, ran) {
+		t.Fatalf("ran\n got %q\nwant %q", r.Ran, ran)
+	}
+	if got := p.Programs(tg); !slices.Equal(got, []string{"gsettings"}) {
+		t.Fatalf("programs %v", got)
+	}
+}
+
+func TestSameGVariant(t *testing.T) {
+	for _, c := range []struct {
+		want any
+		have string
+		same bool
+	}{
+		{true, "true", true}, {false, "true", false}, {5, "uint32 5", true}, {5, "int64 6", false},
+		{1.0, "1.0", true}, {0.5, "0.5", true}, {"x", "'x'", true}, {"it's", `"it's"`, true}, {"x", "'y'", false},
+		{[]any{"a", "b"}, "['a', 'b']", true}, {[]any{}, "@as []", true}, {[]any{"a"}, "@as []", false},
+	} {
+		if got := sameGVariant(c.want, c.have); got != c.same {
+			t.Errorf("sameGVariant(%v, %q) = %v", c.want, c.have, got)
+		}
+	}
+	if got := gvariant(`a'b\c`); got != `'a\'b\\c'` {
+		t.Errorf("gvariant quoting %s", got)
+	}
+}
+
+func TestPlanSetsRegistryValues(t *testing.T) {
+	const theme, explorer = `HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize`, `HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced`
+	query := func(key, name string) string { return sh.Line("reg", "query", key, "/v", name) }
+	r := &sh.Fake{Out: map[string]string{
+		query(theme, "AppsUseLightTheme"):    "\r\n" + theme + "\r\n    AppsUseLightTheme    REG_DWORD    0x1\r\n\r\n",
+		query(theme, "SystemUsesLightTheme"): "\r\n" + theme + "\r\n    SystemUsesLightTheme    REG_DWORD    0x0\r\n\r\n",
+		query(explorer, "TaskbarAl"):         "\r\n" + explorer + "\r\n    TaskbarAl    REG_DWORD    0x0\r\n\r\n",
+	}}
+	p := Provider{r: r, home: `C:\Users\me`}
+	tg := config.Target{Name: "windows", Provider: "settings", OS: []string{"windows"}, Registry: map[string]map[string]any{
+		theme:                        {"AppsUseLightTheme": false, "SystemUsesLightTheme": false},
+		explorer:                     {"TaskbarAl": 0, "HideFileExt": 0},
+		`HKCU\Control Panel\Desktop`: {"Wallpaper": "~/Pictures/zc.png"},
+	}}
+	actions, err := p.Plan(context.Background(), tg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, a := range actions {
+		if err := a.Do(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	ran := []string{
+		`reg add HKCU\Control Panel\Desktop /v Wallpaper /t REG_SZ /d C:\Users\me\Pictures\zc.png /f`,
+		`reg add ` + explorer + ` /v HideFileExt /t REG_DWORD /d 0 /f`,
+		`reg add ` + theme + ` /v AppsUseLightTheme /t REG_DWORD /d 0 /f`,
+	}
+	if !slices.Equal(r.Ran, ran) {
+		t.Fatalf("ran\n got %q\nwant %q", r.Ran, ran)
+	}
+	items, _ := p.Items(context.Background(), tg)
+	if i := items[3]; i.Name != theme+" AppsUseLightTheme" || i.State != provider.Differs || i.Version != "1" {
+		t.Fatalf("item %+v", i)
+	}
+	if got := p.Programs(tg); !slices.Equal(got, []string{"reg"}) {
+		t.Fatalf("programs %v", got)
+	}
+}
+
+func TestSameReg(t *testing.T) {
+	out := []byte("\r\nHKEY_CURRENT_USER\\X\r\n    Font Name    REG_SZ    Cascadia Mono\r\n    Empty    REG_SZ\r\n    Size    REG_DWORD    0x10\r\n")
+	for _, c := range []struct {
+		name string
+		want any
+		same bool
+	}{
+		{"Font Name", "Cascadia Mono", true}, {"font name", "Cascadia", false}, {"Empty", "", true},
+		{"Size", 16, true}, {"Size", 15, false}, {"Size", true, false}, {"Size", "16", false},
+	} {
+		v, ok := regValue(out, c.name)
+		if !ok {
+			t.Fatalf("no value %q", c.name)
+		}
+		if got := sameReg(c.want, v); got != c.same {
+			t.Errorf("sameReg(%v, %+v) = %v", c.want, v, got)
+		}
+	}
+	if _, ok := regValue(out, "Missing"); ok {
+		t.Error("found a value that is not there")
+	}
+}

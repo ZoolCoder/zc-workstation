@@ -87,6 +87,54 @@ jobs:
       - run: go vet ./...
       - run: go test -count=1 ./...
 
+  linux:
+    # A fresh Ubuntu LTS and Fedora: apply installs the packages, a second plan
+    # finds nothing left, and doctor passes.
+    if: github.base_ref == 'main' || github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {image: 'ubuntu:24.04', config: ubuntu, setup: 'apt-get update -q && apt-get install -y -q sudo'}
+          - {image: 'fedora:42', config: fedora, setup: 'dnf install -y -q sudo'}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: go.mod
+      - run: CGO_ENABLED=0 go build -o bin/zc-workstation ./cmd/zc-workstation
+      - env:
+          IMAGE: ${{ matrix.image }}
+          CONFIG: .github/ci/${{ matrix.config }}.yaml
+          SETUP: ${{ matrix.setup }}
+        run: |
+          docker run --rm -v "$PWD:/src" -w /src -e CONFIG -e SETUP -e PATH=/src/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin "$IMAGE" sh -ec '
+            sh -c "$SETUP"
+            zc-workstation apply -config "$CONFIG"
+            zc-workstation plan -exit-code -config "$CONFIG"
+            zc-workstation doctor -config "$CONFIG"
+          '
+
+  windows:
+    # A Windows runner: apply writes registry values and registers a scheduled
+    # task, a second plan finds nothing left, and doctor passes.
+    if: github.base_ref == 'main' || github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: go.mod
+      - run: go build -o bin/zc-workstation.exe ./cmd/zc-workstation
+      - run: |
+          bin/zc-workstation.exe apply -config .github/ci/windows.yaml
+          bin/zc-workstation.exe plan -exit-code -config .github/ci/windows.yaml
+          bin/zc-workstation.exe doctor -config .github/ci/windows.yaml
+
   app:
     # ZCBar, the menu bar app: its core tests, and the release build package.sh makes.
     if: github.base_ref == 'main' || github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'

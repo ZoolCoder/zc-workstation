@@ -36,6 +36,9 @@ from the manifest stays installed, because removing software is your call.
 | `winget install --id ID --exact --silent`
 |===
 
+On a machine with no apt package lists yet, such as a fresh install or a
+container, apply runs `sudo apt-get update` before the first install.
+
 For `list` and the Inventory page, versions and descriptions come from
 `brew info --json=v2 --installed` and `mas list` on macOS,
 `dpkg-query` on apt systems, and `rpm -qa` on dnf systems. winget items list
@@ -154,6 +157,9 @@ directory's config are ignored.
   request when mise knows it.
 * mise refuses to read a config it does not trust. The plan then shows a
   `MANUAL` step: read the file, then run `mise trust`.
+* `doctor` checks that the shell runs each command from mise, not from
+  another copy earlier on `PATH`, such as Homebrew's `node`. The fix is to
+  activate mise last in the shell profile.
 
 [#desktop]
 == desktop
@@ -201,8 +207,11 @@ reach a `data:` URL, so the saver shows the page's default, dark look.
 [#settings]
 == settings
 
-Keeps macOS preferences at the values the config declares, the keys
-`defaults` reads and writes. macOS only, so the target needs `os: [darwin]`.
+Keeps preferences at the values the config declares: on macOS the keys
+`defaults` reads and writes, on GNOME the keys of `gsettings`, and on Windows
+the user's registry values. A target drives one system: `os: [darwin]` with
+`defaults`, `os: [linux]` with `gsettings` or `os: [windows]` with
+`registry`.
 
 [source,yaml]
 ----
@@ -228,11 +237,66 @@ Keeps macOS preferences at the values the config declares, the keys
 * A key the config stops declaring keeps its value. Some keys need a logout
   to take effect.
 
+On GNOME, `gsettings` maps a schema to its keys. A dark desktop with the
+dark Adwaita theme, a faster key repeat and the dock's apps:
+
+[source,yaml]
+----
+- name: gnome
+  provider: settings
+  os: [linux]
+  gsettings:
+    org.gnome.desktop.interface:
+      color-scheme: prefer-dark   # prefer-light or default for a light one
+      gtk-theme: Adwaita-dark     # Adwaita for a light one
+    org.gnome.desktop.peripherals.keyboard:
+      delay: 250
+      repeat-interval: 20
+    org.gnome.shell:
+      favorite-apps: [org.gnome.Nautilus.desktop, com.mitchellh.ghostty.desktop]
+----
+
+* The plan reads each key with `gsettings get` and compares values whatever
+  the type gsettings prints, so `uint32 250` matches `250`.
+* Apply runs `gsettings set` with the value as GVariant text: a string is
+  quoted, a list becomes an array of strings. GNOME applies a change at once;
+  nothing restarts.
+* A schema or key GNOME does not know is a `CREATE` whose apply fails with
+  gsettings' message.
+
+On Windows, `registry` maps a key under `HKCU` to its values. Dark mode, file
+extensions shown and the taskbar on the left:
+
+[source,yaml]
+----
+- name: windows
+  provider: settings
+  os: [windows]
+  registry:
+    'HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize':
+      AppsUseLightTheme: false
+      SystemUsesLightTheme: false
+    'HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced':
+      HideFileExt: 0
+      TaskbarAl: 0
+----
+
+* Only keys under `HKCU` (or `HKEY_CURRENT_USER`): the user's own settings,
+  which need no administrator. Quote a key in single quotes, so YAML keeps
+  its backslashes.
+* The plan reads each value with `reg query`. A bool or an integer is a
+  `REG_DWORD`, so `false` matches `0x0`; a string is a `REG_SZ`. A string
+  starting with `~/` is a path in your home folder.
+* Apply runs `reg add` with the type. Windows applies most values at once;
+  Explorer reads some only when it starts, so sign out to see them.
+
 [#services]
 == services
 
-Keeps background services running: Homebrew services and launchd agents.
-macOS only. It starts what is stopped and never stops anything.
+Keeps background services running: Homebrew services, launchd agents on
+macOS, systemd user units and timers on Linux, and Task Scheduler tasks on
+Windows. A target drives one system, `os: [darwin]`, `os: [linux]` or
+`os: [windows]`. It starts what is stopped and never stops anything.
 
 [source,yaml]
 ----
@@ -253,6 +317,127 @@ macOS only. It starts what is stopped and never stops anything.
   earlier in the config, which writes it first.
 * A changed plist is not reloaded. Reload it from a chezmoi `run_onchange_`
   script that hashes the plist.
+
+On Linux, `agents` names `.service` and `.timer` files:
+
+[source,yaml]
+----
+- name: services-linux
+  provider: services
+  os: [linux]
+  agents: [~/.config/systemd/user/backup.timer, ~/units/syncthing.service]
+----
+
+* A unit is in place when `systemctl --user show` reports it enabled and
+  active; a timer is active while it waits for its next run.
+* Otherwise apply runs `systemctl --user daemon-reload`, then
+  `systemctl --user enable --now` with the file's path, which links in a unit
+  that lives outside systemd's folders.
+* `services` works on Linux too: Homebrew on Linux runs `brew services` on
+  systemd.
+
+On Windows, `agents` names Task Scheduler task files, the `.xml` that Task
+Scheduler's *Export* or `Export-ScheduledTask` writes:
+
+[source,yaml]
+----
+- name: tasks
+  provider: services
+  os: [windows]
+  agents: [tasks/weekly-update.xml]
+----
+
+* The task's name is the file name without `.xml`. It is in place when
+  `Get-ScheduledTask` finds it and it is not disabled; PowerShell reports the
+  state in English whatever the system language.
+* A missing task is registered with `Register-ScheduledTask` from the file,
+  in whatever encoding it has. A disabled one is enabled.
+* A changed file is not registered again. Re-register it by hand, or from a
+  chezmoi `run_onchange_` script that hashes the file.
+
+[#keyboard]
+== keyboard
+
+Remaps keys on Linux with https://github.com/rvaiya/keyd[keyd], which works
+under X11, Wayland and the console alike. The target installs a keyd config
+as `/etc/keyd/default.conf` and keeps the keyd service enabled and running.
+Linux only, so the target needs `os: [linux]`.
+
+[source,yaml]
+----
+- name: keys
+  provider: keyboard
+  os: [linux]
+  file: assets/keyd/default.conf
+----
+
+`assets/keyd/default.conf` makes Caps Lock Escape when tapped and Hyper
+(Control, Alt, Shift and Super together) when held, as Karabiner does on the
+Mac. Point `file` at your own config for other remaps.
+
+* keyd itself comes from your packages: `keyd` on Debian 13 and Ubuntu
+  25.04 or later, which name the program `keyd.rvaiya`, or the keyd COPR on
+  Fedora. Until it is installed the plan shows a `MANUAL` step.
+* The plan compares the file byte for byte. Apply copies it with
+  `sudo install -m 644`, then runs `keyd reload` when keyd is running.
+* keyd is in place when `systemctl show keyd` reports it enabled and active;
+  otherwise apply runs `sudo systemctl enable --now keyd`.
+
+[#agents]
+== agents
+
+Declares, once, what every AI coding agent gets: MCP servers, a rules file,
+skills, and the models Ollama serves. It writes them into Claude Code, Codex,
+Cursor and Gemini CLI. It adds and updates, and never removes a server, skill
+or model the file does not name.
+
+[source,yaml]
+----
+- name: ai
+  provider: agents
+  file: agents.yaml
+----
+
+`agents.yaml`:
+
+[source,yaml]
+----
+clients: [claude, codex, cursor, gemini]   # leave out for all four
+servers:
+  context7:
+    command: npx
+    args: [-y, "@upstash/context7-mcp@2.1.0"]   # pin a version; doctor warns otherwise
+  github:
+    url: https://api.githubcopilot.com/mcp/
+    headers: {Authorization: "Bearer ${GITHUB_TOKEN}"}
+rules: AGENTS.md          # relative to agents.yaml
+skills: [skills/review]   # folders holding a SKILL.md
+models: [qwen3:8b, nomic-embed-text]
+----
+
+[cols="1,2,2,2"]
+|===
+|Client |MCP servers |Rules |Skills
+
+|claude |`~/.claude.json` |`~/.claude/CLAUDE.md` |`~/.claude/skills`
+|codex |`~/.codex/config.toml` |`~/.codex/AGENTS.md` |`~/.codex/skills`
+|cursor |`~/.cursor/mcp.json` |kept in Cursor's settings |none
+|gemini |`~/.gemini/settings.json` |`~/.gemini/GEMINI.md` |none
+|===
+
+* A server is set by name in `mcpServers`; every other key in the file stays
+  as it was. Each file is replaced in one rename, read again just before the
+  write, so an agent writing it in between keeps its change.
+* Codex reads TOML. Its servers live in a marked block of `config.toml`. A
+  server Codex already declares outside the block is a `MANUAL` step, since a
+  table declared twice breaks the file. An env value written `+${NAME}+` becomes
+  an `env_vars` entry, which Codex passes through from your shell.
+* The rules file lands in a marked block, so what you wrote around it stays.
+* A skill is in place when every file in its folder matches.
+* A model is in place when `ollama list` shows it; otherwise apply runs
+  `ollama pull`. `ollama serve` must be running. `list` shows each model.
+* Keep keys out of the file: write `+${NAME}+` and keep the value in the
+  keychain or a password manager. `doctor` warns about plain-text keys.
 
 [#localdir]
 == localdir

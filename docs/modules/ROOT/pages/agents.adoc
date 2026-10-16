@@ -15,12 +15,28 @@
 | `validate` | Check the config offline. Read-only.
 | `plan` | Plan and save it. Returns a `plan_id`. Changes nothing.
 | `apply` | Apply a saved plan by `plan_id`. Refuses when live state moved.
-| `doctor` | Install health. Read-only.
+| `doctor` | Install health, security settings and AI agent configs. Read-only.
+| `history` | What was applied, newest first, and from where. Read-only.
+| `drift` | What the last daily drift check found. Read-only.
 |===
 
 `apply` takes only the id of a plan the server saved, never a plan body. A
 plan that deletes is cancelled and the reply names the terminal command for
 the user to run.
+
+* *Plans expire.* A saved plan older than an hour is refused; the agent plans
+  again and shows the user the new one.
+* *Every call is logged.* Each tool call, its arguments and whether it worked
+  go to `~/.local/state/zc-workstation/mcp-audit.jsonl`. An apply also lands
+  in `zc-workstation history` as applied from an agent.
+* *Tools say what they do.* Each tool carries MCP annotations: read-only
+  tools say so, `add` edits a file, `remove` is destructive, and `apply`
+  changes the machine. A client can ask before the ones that write.
+* *Resources.* The server offers the config (`zc-workstation://config`), the
+  last 50 applies (`zc-workstation://history`) and each target's manifest
+  (`zc-workstation://manifest/<target>`), so an agent reads them without a
+  tool call.
+* *Prompts.* Each skill is also an MCP prompt, for clients without skills.
 
 == Claude Code plugin
 
@@ -53,18 +69,22 @@ $ claude plugin install zc-workstation
 the release notes between the old and the new version, from GitHub releases
 when the homepage is on GitHub, and keeps only what touches each item's why.
 
-To know what an update moved, save the outdated list just before upgrading.
-`review` reads the newest file in
-`$XDG_STATE_HOME/zc-workstation/upgrades/`, by default
-`~/.local/state/zc-workstation/upgrades/`:
+To know what an update moved, upgrade with `zc-workstation upgrade`. It
+saves the outdated list to `~/.local/state/zc-workstation/upgrades/`, then
+runs `apply -upgrade`; `review` reads the newest file there.
 
-[source,bash]
+[source,console]
 ----
-dir="${XDG_STATE_HOME:-$HOME/.local/state}/zc-workstation/upgrades"
-mkdir -p "$dir"
-zc-workstation list -json -state outdated > "$dir/$(date +%F).json"
-brew upgrade && mise upgrade
+$ zc-workstation upgrade             # everything outdated
+$ zc-workstation upgrade -only brew:tmux
 ----
+
+== One setup for every agent
+
+The xref:providers.adoc#agents[`agents` provider] writes the same MCP
+servers, rules and skills into Claude Code, Codex, Cursor and Gemini CLI, and
+pulls the Ollama models you name. A new machine gets them with the rest of
+`apply`.
 
 == Other agents
 

@@ -59,7 +59,11 @@ disk clean. See xref:app.adoc[].
 |xref:toolbox/eza.adoc[eza] |eza, ls with icons, git status and trees.
 |xref:toolbox/bat.adoc[bat] |bat, cat with syntax highlighting and git changes; also the man page pager.
 |xref:toolbox/fd-ripgrep.adoc[fd and ripgrep] |fd and ripgrep, fast find and grep that respect .gitignore.
+|xref:toolbox/jq-yq.adoc[jq and yq] |jq and yq, query and edit JSON and YAML from the command line.
 |xref:toolbox/yazi.adoc[Yazi] |Yazi, a terminal file manager with previews.
+|xref:toolbox/media.adoc[ffmpeg, sox, jpegoptim, pngquant and poppler] |Convert and shrink video, audio, images and PDFs.
+|xref:toolbox/cli-helpers.adoc[just, xh, hyperfine and other helpers] |Project recipes, HTTP calls, benchmarks, command examples, Python scripts and shell linting.
+|xref:toolbox/keys-mail.adoc[GnuPG, oathtool and mailctl] |Signatures, one-time codes and mail accounts kept in a file.
 |===
 
 == Git and GitHub
@@ -83,6 +87,8 @@ disk clean. See xref:app.adoc[].
 |xref:toolbox/mise.adoc[mise] |mise, the runtime manager: Java, Node, Python and Gradle versions.
 |xref:toolbox/chezmoi.adoc[chezmoi] |chezmoi, the dotfiles engine behind the dotfiles provider.
 |xref:toolbox/direnv.adoc[direnv] |direnv, per-folder environment variables.
+|xref:toolbox/go.adoc[Go, gopls, delve and golangci-lint] |The Go toolchain, its language server, debugger and linter.
+|xref:toolbox/languages.adoc[jdtls, typescript-language-server and CocoaPods] |The Java and TypeScript language servers, and CocoaPods for Flutter on iOS.
 |===
 
 == Containers and data
@@ -93,6 +99,7 @@ disk clean. See xref:app.adoc[].
 
 |xref:toolbox/containers.adoc[Colima, Docker and friends] |Colima, Docker, lazydocker, dive and the Kubernetes tools.
 |xref:toolbox/postgresql.adoc[PostgreSQL, pgcli and TablePlus] |A local PostgreSQL 17 server, pgcli and TablePlus.
+|xref:toolbox/cloud.adoc[Cloud CLIs] |AWS, Google Cloud, Hetzner, Cloudflare Tunnel, Fly.io, Neon, Supabase and the other deploy tools.
 |===
 
 == Desktop
@@ -105,7 +112,7 @@ disk clean. See xref:app.adoc[].
 |xref:toolbox/karabiner.adoc[Karabiner-Elements and the Hyper key] |Karabiner-Elements: Caps Lock as Escape and Hyper, and Hyper shortcuts for apps.
 |xref:toolbox/raycast.adoc[Raycast] |Raycast, the launcher, with clipboard history and script commands.
 |xref:toolbox/chrome.adoc[Google Chrome] |Chrome, the default browser, with a small set of extensions.
-|xref:toolbox/everyday-apps.adoc[Everyday apps] |Shottr, Handy, Bruno, Obsidian, Proxyman and the other desktop apps.
+|xref:toolbox/everyday-apps.adoc[Everyday apps] |Shottr, Handy, Bruno, Obsidian, Proxyman, the meeting apps and the fonts.
 |===
 
 == Editors

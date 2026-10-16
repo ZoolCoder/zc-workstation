@@ -1,0 +1,101 @@
+= A Windows machine
+:description: Set up Windows with zc-workstation: winget packages, chezmoi dotfiles, mise runtimes, registry settings and scheduled tasks.
+
+On Windows, zc-workstation installs packages with winget, applies dotfiles
+with chezmoi, installs runtimes with mise, keeps registry settings and
+registers scheduled tasks.
+
+== Before the first plan
+
+winget ships with Windows 11 and current Windows 10. Install chezmoi and mise
+with it, then download the `windows_amd64` or `windows_arm64` zip from the
+releases page and put `zc-workstation.exe` on your `PATH`.
+
+[source,powershell]
+----
+PS> winget install --id twpayne.chezmoi --exact
+PS> winget install --id jdx.mise --exact
+----
+
+== A config for Windows
+
+The packages target reads a `winget export` file. Give it `os: [windows]`,
+so the same config also drives your Mac and Linux machines.
+
+[source,yaml]
+----
+version: 1
+targets:
+  - name: winget
+    provider: packages
+    os: [windows]
+    file: winget.json
+  - name: home
+    provider: dotfiles
+    source: home
+  - name: runtimes
+    provider: tools
+    file: mise.toml
+----
+
+Write `winget.json` from what the machine has with
+`winget export -o winget.json`, or start from `example/winget.json`: Git,
+chezmoi, mise, WezTerm, PowerShell 7, starship, atuin and the JetBrainsMono
+Nerd Font.
+chezmoi names files the same way on every system; use its templates for what
+differs, such as `{{ if eq .chezmoi.os "windows" }}`.
+
+== Settings and scheduled tasks
+
+A `settings` target keeps registry values under `HKCU`, and a `services`
+target keeps Task Scheduler tasks registered. Each needs `os: [windows]`.
+
+[source,yaml]
+----
+  - name: windows
+    provider: settings
+    os: [windows]
+    registry:
+      'HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize':
+        AppsUseLightTheme: false
+        SystemUsesLightTheme: false
+  - name: tasks
+    provider: services
+    os: [windows]
+    agents: [tasks/weekly-update.xml]
+----
+
+Write a task file with Task Scheduler's *Export*, or with
+`Export-ScheduledTask -TaskName weekly-update > tasks/weekly-update.xml`.
+xref:providers.adoc#settings[settings] and
+xref:providers.adoc#services[services] have the details.
+
+== PowerShell and WezTerm
+
+The ZoolCoder theme, a `dotfiles` target with
+`source: ../zc-workstation/assets/theme`, writes the same look as on the Mac:
+
+* `~/.config/wezterm/wezterm.lua`: the colours, font and glass, with
+  PowerShell 7 as the shell.
+* `~/.config/starship.toml`, the prompt, which starship reads on Windows too.
+* `~/.config/zoolcoder/theme.ps1`, the colours of PowerShell's line editor.
+
+`example/home` has a PowerShell 7 profile,
+`Documents/PowerShell/Microsoft.PowerShell_profile.ps1`, that starts mise,
+starship and atuin and loads the colours. chezmoi writes it only on Windows.
+If OneDrive moves your Documents folder, `$PROFILE` points into OneDrive:
+move the file in the chezmoi source to `OneDrive/Documents/PowerShell`.
+
+== Plan, apply, check
+
+[source,powershell]
+----
+PS> zc-workstation plan -out plan.json
+PS> zc-workstation apply plan.json
+PS> zc-workstation doctor
+----
+
+== Not on Windows yet
+
+The `desktop` and `keyboard` providers are macOS and Linux only. ZCBar and
+ZC Care are macOS apps.

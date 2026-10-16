@@ -94,7 +94,19 @@ targets:
   - {name: st, provider: settings, os: [darwin]}
   - {name: sv, provider: settings, os: [darwin], defaults: {com.apple.dock: {persistent-apps: [a]}}, services: [x]}
   - {name: se, provider: services, os: [darwin], agents: [job.txt]}
-  - {name: sl, provider: services, os: [linux], services: [x]}
+  - {name: sl, provider: services, os: [darwin, linux], services: [x]}
+  - {name: su, provider: services, os: [linux], agents: [a.plist]}
+  - {name: gl, provider: settings, os: [linux], defaults: {a: {b: 1}}}
+  - {name: gm, provider: settings, os: [darwin], defaults: {a: {b: 1}}, gsettings: {a: {b: 1}}}
+  - {name: gv, provider: settings, os: [linux], gsettings: {org.gnome.x: {k: [1, 2]}}}
+  - {name: go, provider: settings, os: [darwin, linux], defaults: {a: {b: 1}}}
+  - {name: sm, provider: services, os: [darwin], agents: [a.timer]}
+  - {name: kb, provider: keyboard, os: [darwin]}
+  - {name: rw, provider: settings, os: [windows], gsettings: {a: {b: 1}}}
+  - {name: rk, provider: settings, os: [windows], registry: {'HKLM\Software\X': {a: 1.5}}}
+  - {name: rd, provider: settings, os: [darwin], defaults: {a: {b: 1}}, registry: {'HKCU\X': {a: 1}}}
+  - {name: tw, provider: services, os: [windows], services: [x], agents: [a.plist]}
+  - {name: tx, provider: services, os: [darwin], agents: [backup.xml]}
 `))
 	if err == nil {
 		t.Fatal("invalid config accepted")
@@ -106,8 +118,18 @@ targets:
 		"target dk: set wallpaper, screensaver or accent", "target dk: file does nothing", "target dk: provider desktop drives macOS only",
 		"target dl: provider desktop drives macOS only", `target da: accent "teal" is not one of`,
 		"target st: defaults is required", "target sv: com.apple.dock persistent-apps must be a bool, number or string",
-		"target sv: services does nothing", `target se: agent "job.txt" must be a .plist file`,
-		"target sl: provider services drives macOS only",
+		"target sv: services does nothing", `target se: agent "job.txt" must be a .plist, .service, .timer or .xml file`,
+		"target sl: provider services drives one system", `target su: agent "a.plist" is a launchd plist`,
+		`target sm: agent "a.timer" is a systemd unit`,
+		"target gl: gsettings is required for provider settings on linux", "target gl: defaults does nothing",
+		"target gm: gsettings does nothing", "target gv: org.gnome.x k must be a bool, number, string or list of strings",
+		"target go: provider settings drives one system",
+		"target kb: file is required", "target kb: provider keyboard drives keyd on Linux only",
+		"target rw: registry is required for provider settings on windows", "target rw: gsettings does nothing",
+		`target rk: registry key HKLM\Software\X must be under HKCU`, `target rk: HKLM\Software\X a must be a bool, integer or string`,
+		"target rd: registry does nothing",
+		"target tw: services are Homebrew services", `target tw: agent "a.plist" is not a task`,
+		`target tx: agent "backup.xml" is a Task Scheduler task`,
 	} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("error lacks %q:\n%v", want, err)

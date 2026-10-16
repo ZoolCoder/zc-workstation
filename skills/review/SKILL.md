@@ -15,7 +15,7 @@ All read-only, MCP or CLI:
 
 - `doctor` (`zc-workstation doctor -json`): install health.
 - `list` (`zc-workstation list -json`): every item with its state, version, newer version, section and why.
-- Recent upgrades: if `${XDG_STATE_HOME:-~/.local/state}/zc-workstation/upgrades/` holds snapshots, the newest file is a `list -json -state outdated` taken just before the last update, so each item moved from `version` to `latest`.
+- Recent upgrades: if `${XDG_STATE_HOME:-~/.local/state}/zc-workstation/upgrades/` holds snapshots, the newest file is a `list -json -state outdated` that `zc-workstation upgrade` took just before the last update, so each item moved from `version` to `latest`.
 
 ## 2. What is new
 
