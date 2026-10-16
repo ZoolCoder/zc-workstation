@@ -1,0 +1,21 @@
+# The config CI applies, then checks with doctor, on a Windows runner.
+version: 1
+
+targets:
+  - name: registry
+    provider: settings
+    os: [windows]
+    registry:
+      'HKCU\Software\zc-workstation-ci':
+        Enabled: true
+        Retries: 3
+        Theme: zoolcoder
+  - name: tasks
+    provider: services
+    os: [windows]
+    agents: [windows/zc-workstation-ci.xml]
+  - name: notes
+    provider: localdir
+    path: ../../bin/ci-notes
+    files:
+      README.md: "written by zc-workstation in CI\n"

@@ -116,6 +116,25 @@ jobs:
             zc-workstation doctor -config "$CONFIG"
           '
 
+  windows:
+    # A Windows runner: apply writes registry values and registers a scheduled
+    # task, a second plan finds nothing left, and doctor passes.
+    if: github.base_ref == 'main' || github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: go.mod
+      - run: go build -o bin/zc-workstation.exe ./cmd/zc-workstation
+      - run: |
+          bin/zc-workstation.exe apply -config .github/ci/windows.yaml
+          bin/zc-workstation.exe plan -exit-code -config .github/ci/windows.yaml
+          bin/zc-workstation.exe doctor -config .github/ci/windows.yaml
+
   app:
     # ZCBar, the menu bar app: its core tests, and the release build package.sh makes.
     if: github.base_ref == 'main' || github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
