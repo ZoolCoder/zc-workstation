@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"github.com/zoolcoder/zc-workstation/internal/sh"
@@ -48,8 +49,27 @@ func Shadowed(ctx context.Context, r sh.Runner, dir string, lookPath func(string
 }
 
 // executable reports whether path, or what a link at path points to, is a
-// file anyone may run.
+// file anyone may run. Windows has no execute bit, so there the extension
+// decides, as PATHEXT lists them.
 func executable(path string) bool {
 	info, err := os.Stat(path)
-	return err == nil && !info.IsDir() && info.Mode().Perm()&0o111 != 0
+	if err != nil || info.IsDir() {
+		return false
+	}
+	if runtime.GOOS == "windows" {
+		return runnableExt(filepath.Ext(path), os.Getenv("PATHEXT"))
+	}
+	return info.Mode().Perm()&0o111 != 0
+}
+
+func runnableExt(ext, pathext string) bool {
+	if pathext == "" {
+		pathext = ".com;.exe;.bat;.cmd"
+	}
+	for e := range strings.SplitSeq(pathext, ";") {
+		if e != "" && strings.EqualFold(e, ext) {
+			return true
+		}
+	}
+	return false
 }
