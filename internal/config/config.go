@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -84,10 +85,16 @@ type Target struct {
 	// the keys the settings provider keeps on Linux: a bool, a number, a
 	// string or a list of strings.
 	Gsettings map[string]map[string]any `yaml:"gsettings"`
+	// Registry maps a Windows registry key under HKCU, such as
+	// HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize, to
+	// the values the settings provider keeps: a bool or an integer, stored as
+	// a DWORD, or a string.
+	Registry map[string]map[string]any `yaml:"registry"`
 	// Services are the Homebrew services the services provider keeps running.
 	Services []string `yaml:"services"`
-	// Agents are launchd agent plists, or on Linux systemd user units and
-	// timers, the services provider keeps loaded.
+	// Agents are launchd agent plists, on Linux systemd user units and
+	// timers, and on Windows Task Scheduler task files (.xml), the services
+	// provider keeps loaded.
 	Agents []string `yaml:"agents"`
 }
 
@@ -272,19 +279,19 @@ func (t Target) validateFields(where string) []error {
 			errs = append(errs, fmt.Errorf("%s: accent %q is not one of %s", where, t.Accent, strings.Join(Accents, ", ")))
 		}
 	case "settings":
-		switch {
-		case slices.Equal(t.OS, []string{"linux"}):
-			if len(t.Gsettings) == 0 {
-				errs = append(errs, fmt.Errorf("%s: gsettings is required for provider settings on linux", where))
+		// Each system reads its own map; the others do nothing there.
+		set := map[string]bool{"defaults": len(t.Defaults) > 0, "gsettings": len(t.Gsettings) > 0, "registry": len(t.Registry) > 0}
+		own := map[string]string{"darwin": "defaults", "linux": "gsettings", "windows": "registry"}
+		if len(t.OS) != 1 || own[t.OS[0]] == "" {
+			errs = append(errs, fmt.Errorf("%s: provider settings drives one system; set os: [darwin], os: [linux] or os: [windows]", where))
+			break
+		}
+		for _, field := range slices.Sorted(maps.Keys(set)) {
+			if field != own[t.OS[0]] {
+				unused(field, set[field])
+			} else if !set[field] {
+				errs = append(errs, fmt.Errorf("%s: %s is required for provider settings on %s", where, field, t.OS[0]))
 			}
-			unused("defaults", len(t.Defaults) > 0)
-		case slices.Equal(t.OS, []string{"darwin"}):
-			if len(t.Defaults) == 0 {
-				errs = append(errs, fmt.Errorf("%s: defaults is required for provider settings", where))
-			}
-			unused("gsettings", len(t.Gsettings) > 0)
-		default:
-			errs = append(errs, fmt.Errorf("%s: provider settings drives one system; set os: [darwin] or os: [linux]", where))
 		}
 		for domain, keys := range t.Defaults {
 			for name, v := range keys {
@@ -302,21 +309,40 @@ func (t Target) validateFields(where string) []error {
 				}
 			}
 		}
+		for key, values := range t.Registry {
+			if !UserKey(key) {
+				errs = append(errs, fmt.Errorf(`%s: registry key %s must be under HKCU\: only the user's own settings, which need no administrator`, where, key))
+			}
+			for name, v := range values {
+				switch v.(type) {
+				case bool, int, string:
+				default:
+					errs = append(errs, fmt.Errorf("%s: %s %s must be a bool, integer or string", where, key, name))
+				}
+			}
+		}
 	case "services":
 		if len(t.Services) == 0 && len(t.Agents) == 0 {
 			errs = append(errs, fmt.Errorf("%s: set services or agents for provider services", where))
 		}
-		linux := slices.Equal(t.OS, []string{"linux"})
-		if !linux && !slices.Equal(t.OS, []string{"darwin"}) {
-			errs = append(errs, fmt.Errorf("%s: provider services drives one system; set os: [darwin] or os: [linux]", where))
+		linux, windows := slices.Equal(t.OS, []string{"linux"}), slices.Equal(t.OS, []string{"windows"})
+		if !linux && !windows && !slices.Equal(t.OS, []string{"darwin"}) {
+			errs = append(errs, fmt.Errorf("%s: provider services drives one system; set os: [darwin], os: [linux] or os: [windows]", where))
+		}
+		if windows && len(t.Services) > 0 {
+			errs = append(errs, fmt.Errorf("%s: services are Homebrew services; Windows takes Task Scheduler tasks under agents", where))
 		}
 		for _, a := range t.Agents {
 			switch ext := filepath.Ext(a); {
-			case ext != ".plist" && ext != ".service" && ext != ".timer":
-				errs = append(errs, fmt.Errorf("%s: agent %q must be a .plist, .service or .timer file", where, a))
+			case ext != ".plist" && ext != ".service" && ext != ".timer" && ext != ".xml":
+				errs = append(errs, fmt.Errorf("%s: agent %q must be a .plist, .service, .timer or .xml file", where, a))
+			case windows && ext != ".xml":
+				errs = append(errs, fmt.Errorf("%s: agent %q is not a task; Windows takes Task Scheduler .xml files", where, a))
+			case !windows && ext == ".xml":
+				errs = append(errs, fmt.Errorf("%s: agent %q is a Task Scheduler task; set os: [windows]", where, a))
 			case linux && ext == ".plist":
 				errs = append(errs, fmt.Errorf("%s: agent %q is a launchd plist; Linux takes .service and .timer units", where, a))
-			case !linux && ext != ".plist":
+			case !linux && !windows && ext != ".plist":
 				errs = append(errs, fmt.Errorf("%s: agent %q is a systemd unit; macOS takes .plist files", where, a))
 			}
 		}
@@ -354,12 +380,19 @@ func (t Target) validateFields(where string) []error {
 	if t.Provider != "settings" {
 		unused("defaults", len(t.Defaults) > 0)
 		unused("gsettings", len(t.Gsettings) > 0)
+		unused("registry", len(t.Registry) > 0)
 	}
 	if t.Provider != "services" {
 		unused("services", len(t.Services) > 0)
 		unused("agents", len(t.Agents) > 0)
 	}
 	return errs
+}
+
+// UserKey reports whether a registry key is under HKEY_CURRENT_USER.
+func UserKey(key string) bool {
+	root, _, _ := strings.Cut(key, `\`)
+	return strings.EqualFold(root, "HKCU") || strings.EqualFold(root, "HKEY_CURRENT_USER")
 }
 
 // gvariantValue reports whether v is a value gsettings can be given: a bool,

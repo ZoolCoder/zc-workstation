@@ -59,8 +59,9 @@ targets:
 | | `accent` | The macOS accent colour: `blue`, `purple`, `pink`, `red`, `orange`, `yellow`, `green` or `graphite`.
 | `settings` | `defaults` | Required on macOS. A macOS preferences domain, such as `com.apple.dock` or `NSGlobalDomain`, to its keys and values: a bool, an integer, a number or a string. A string starting with `~/` is a path in your home directory. The target needs `os: [darwin]`.
 | | `gsettings` | Required on Linux. A GNOME schema, such as `org.gnome.desktop.interface`, to its keys and values: a bool, a number, a string or a list of strings. The target needs `os: [linux]`.
+| | `registry` | Required on Windows. A registry key under `HKCU`, such as `'HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize'`, to its values: a bool or an integer, stored as a DWORD, or a string. The target needs `os: [windows]`.
 | `services` | `services` | Homebrew services to keep running. Set this, `agents`, or both. The target needs `os: [darwin]` or `os: [linux]`.
-| | `agents` | launchd agent plists to keep loaded, the label being the file name without `.plist`; on Linux, systemd user `.service` and `.timer` files to keep enabled and active.
+| | `agents` | launchd agent plists to keep loaded, the label being the file name without `.plist`; on Linux, systemd user `.service` and `.timer` files to keep enabled and active; on Windows, Task Scheduler `.xml` files to keep registered and enabled. The target needs one `os`.
 | `keyboard` | `file` | Required. The keyd config to install as `/etc/keyd/default.conf`, such as `assets/keyd/default.conf`. The target needs `os: [linux]`.
 | `localdir` | `path` | Required. The directory to keep.
 | | `files` | File name to content. Names must stay inside `path`.

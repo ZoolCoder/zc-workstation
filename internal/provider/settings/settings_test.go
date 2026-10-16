@@ -151,3 +151,66 @@ func TestSameGVariant(t *testing.T) {
 		t.Errorf("gvariant quoting %s", got)
 	}
 }
+
+func TestPlanSetsRegistryValues(t *testing.T) {
+	const theme, explorer = `HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize`, `HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced`
+	query := func(key, name string) string { return sh.Line("reg", "query", key, "/v", name) }
+	r := &sh.Fake{Out: map[string]string{
+		query(theme, "AppsUseLightTheme"):    "\r\n" + theme + "\r\n    AppsUseLightTheme    REG_DWORD    0x1\r\n\r\n",
+		query(theme, "SystemUsesLightTheme"): "\r\n" + theme + "\r\n    SystemUsesLightTheme    REG_DWORD    0x0\r\n\r\n",
+		query(explorer, "TaskbarAl"):         "\r\n" + explorer + "\r\n    TaskbarAl    REG_DWORD    0x0\r\n\r\n",
+	}}
+	p := Provider{r: r, home: `C:\Users\me`}
+	tg := config.Target{Name: "windows", Provider: "settings", OS: []string{"windows"}, Registry: map[string]map[string]any{
+		theme:                        {"AppsUseLightTheme": false, "SystemUsesLightTheme": false},
+		explorer:                     {"TaskbarAl": 0, "HideFileExt": 0},
+		`HKCU\Control Panel\Desktop`: {"Wallpaper": "~/Pictures/zc.png"},
+	}}
+	actions, err := p.Plan(context.Background(), tg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, a := range actions {
+		if err := a.Do(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	ran := []string{
+		`reg add HKCU\Control Panel\Desktop /v Wallpaper /t REG_SZ /d C:\Users\me\Pictures\zc.png /f`,
+		`reg add ` + explorer + ` /v HideFileExt /t REG_DWORD /d 0 /f`,
+		`reg add ` + theme + ` /v AppsUseLightTheme /t REG_DWORD /d 0 /f`,
+	}
+	if !slices.Equal(r.Ran, ran) {
+		t.Fatalf("ran\n got %q\nwant %q", r.Ran, ran)
+	}
+	items, _ := p.Items(context.Background(), tg)
+	if i := items[3]; i.Name != theme+" AppsUseLightTheme" || i.State != provider.Differs || i.Version != "1" {
+		t.Fatalf("item %+v", i)
+	}
+	if got := p.Programs(tg); !slices.Equal(got, []string{"reg"}) {
+		t.Fatalf("programs %v", got)
+	}
+}
+
+func TestSameReg(t *testing.T) {
+	out := []byte("\r\nHKEY_CURRENT_USER\\X\r\n    Font Name    REG_SZ    Cascadia Mono\r\n    Empty    REG_SZ\r\n    Size    REG_DWORD    0x10\r\n")
+	for _, c := range []struct {
+		name string
+		want any
+		same bool
+	}{
+		{"Font Name", "Cascadia Mono", true}, {"font name", "Cascadia", false}, {"Empty", "", true},
+		{"Size", 16, true}, {"Size", 15, false}, {"Size", true, false}, {"Size", "16", false},
+	} {
+		v, ok := regValue(out, c.name)
+		if !ok {
+			t.Fatalf("no value %q", c.name)
+		}
+		if got := sameReg(c.want, v); got != c.same {
+			t.Errorf("sameReg(%v, %+v) = %v", c.want, v, got)
+		}
+	}
+	if _, ok := regValue(out, "Missing"); ok {
+		t.Error("found a value that is not there")
+	}
+}
