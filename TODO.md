@@ -38,5 +38,3 @@ same work. Remove the line in the pull request that finishes it.
 ## Quality
 
 - [ ] A clean-machine test on a tart macOS VM, run before each release.
-- [ ] *Good first change:* a `doctor` check for a common misconfiguration you
-      hit, with its fix text and a test.

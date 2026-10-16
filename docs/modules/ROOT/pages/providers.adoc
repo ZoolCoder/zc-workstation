@@ -157,6 +157,9 @@ directory's config are ignored.
   request when mise knows it.
 * mise refuses to read a config it does not trust. The plan then shows a
   `MANUAL` step: read the file, then run `mise trust`.
+* `doctor` checks that the shell runs each command from mise, not from
+  another copy earlier on `PATH`, such as Homebrew's `node`. The fix is to
+  activate mise last in the shell profile.
 
 [#desktop]
 == desktop
