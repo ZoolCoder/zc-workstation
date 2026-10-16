@@ -12,7 +12,11 @@
         { "PackageIdentifier": "Git.Git" },
         { "PackageIdentifier": "twpayne.chezmoi" },
         { "PackageIdentifier": "jdx.mise" },
-        { "PackageIdentifier": "wez.wezterm" }
+        { "PackageIdentifier": "wez.wezterm" },
+        { "PackageIdentifier": "Microsoft.PowerShell" },
+        { "PackageIdentifier": "Starship.Starship" },
+        { "PackageIdentifier": "Atuinsh.Atuin" },
+        { "PackageIdentifier": "DEVCOM.JetBrainsMonoNerdFont" }
       ]
     }
   ]
