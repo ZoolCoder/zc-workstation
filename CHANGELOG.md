@@ -4,7 +4,7 @@ Notable changes, newest first. Versions follow [semver](https://semver.org);
 before 1.0 a minor bump may change the config format, and any that does says so
 here with what to edit.
 
-## Unreleased
+## v0.1.0 — 2026-10-16
 
 ### Watch, history and upgrade
 
