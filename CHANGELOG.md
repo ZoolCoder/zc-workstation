@@ -40,6 +40,8 @@ here with what to edit.
   browser is closed. Bookmarks and passwords stay.
 - Releases ship ZCBar too: a universal app, attested, with a `zcbar` cask
   in the tap (`brew install --cask zcbar`).
+- `doctor` warns when a command from a `tools` target runs from another
+  copy on `PATH`, such as Homebrew's `node` ahead of mise's.
 - `doctor` checks SSH keys without a passphrase, commit signing, secrets in
   the shell history (through gitleaks, redacted), Remote Login, Screen
   Sharing, automatic login and AirDrop.
