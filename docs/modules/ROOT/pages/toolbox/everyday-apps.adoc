@@ -1,5 +1,5 @@
 = Everyday apps
-:description: Shottr, Handy, Bruno, Obsidian, Proxyman and the other desktop apps.
+:description: Shottr, Handy, Bruno, Obsidian, Proxyman, the meeting apps and the fonts.
 
 Small apps that each do one job well.
 
@@ -12,6 +12,10 @@ Small apps that each do one job well.
 * **Proxyman:** inspect and change HTTP and HTTPS traffic.
 * **TablePlus:** a database GUI.
 * **AnyDesk:** remote desktop, to help or be helped.
+* **Microsoft Teams and Zoom:** company chat and video meetings.
+* **JetBrains Mono Nerd Font:** the font of the terminal, editors and bar,
+  with the icons that eza, starship and SketchyBar draw.
+* **Cairo:** a font for Arabic text.
 
 == See also
 

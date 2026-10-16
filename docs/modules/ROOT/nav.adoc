@@ -30,6 +30,8 @@
 ** xref:toolbox/jq-yq.adoc[jq and yq]
 ** xref:toolbox/yazi.adoc[Yazi]
 ** xref:toolbox/media.adoc[Media tools]
+** xref:toolbox/cli-helpers.adoc[just, xh and helpers]
+** xref:toolbox/keys-mail.adoc[GnuPG, oathtool, mailctl]
 * Git and GitHub
 ** xref:toolbox/git-tools.adoc[git and diff tools]
 ** xref:toolbox/lazygit.adoc[lazygit]
@@ -40,6 +42,7 @@
 ** xref:toolbox/chezmoi.adoc[chezmoi]
 ** xref:toolbox/direnv.adoc[direnv]
 ** xref:toolbox/go.adoc[Go tools]
+** xref:toolbox/languages.adoc[Language servers]
 * Containers and data
 ** xref:toolbox/containers.adoc[Colima and Docker]
 ** xref:toolbox/postgresql.adoc[PostgreSQL]
