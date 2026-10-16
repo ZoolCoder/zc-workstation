@@ -33,8 +33,9 @@ concrete next tasks are in [TODO.md](../TODO.md).
 ## Next
 
 - ZCBar signed with a Developer ID and notarised.
-- Phase 3, native Windows: registry settings, Task Scheduler, PowerShell,
-  WezTerm.
+- Phase 3, native Windows: the registry, Task Scheduler, a PowerShell profile
+  and WezTerm are built; the phase is done once the Windows CI job that
+  applies a config passes.
 
 ## Later
 
