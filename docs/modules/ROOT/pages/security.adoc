@@ -68,9 +68,8 @@ has SLSA build provenance and an SPDX SBOM.
 +
 [source,sh]
 ----
-cosign verify-blob checksums.txt \
-  --signature checksums.txt.sig --certificate checksums.txt.pem \
-  --certificate-identity-regexp '^https://github.com/zoolcoder/zc-workstation/.github/workflows/release.yml@refs/tags/v' \
+cosign verify-blob checksums.txt --bundle checksums.txt.sigstore.json \
+  --certificate-identity-regexp '^https://github.com/ZoolCoder/zc-workstation/.github/workflows/release.yml@refs/tags/v' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 ----
 . Check the file you downloaded against the checksums:

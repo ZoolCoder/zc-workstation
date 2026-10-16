@@ -35,14 +35,13 @@ sboms:
 # Keyless cosign: the signature binds checksums.txt to this repository's
 # release workflow through GitHub's OIDC token, with no key to keep.
 # Verify steps: docs/modules/ROOT/pages/security.adoc
+# cosign 3 writes the signature and certificate into one sigstore bundle.
 signs:
   - cmd: cosign
-    signature: "${artifact}.sig"
-    certificate: "${artifact}.pem"
+    signature: "${artifact}.sigstore.json"
     args:
       - sign-blob
-      - "--output-certificate=${certificate}"
-      - "--output-signature=${signature}"
+      - "--bundle=${signature}"
       - "${artifact}"
       - --yes
     artifacts: checksum
