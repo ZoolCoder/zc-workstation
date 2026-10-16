@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/zoolcoder/zc-workstation/internal/config"
+	"github.com/zoolcoder/zc-workstation/internal/plan"
 	"github.com/zoolcoder/zc-workstation/internal/sh"
 )
 
@@ -113,6 +114,45 @@ func TestPlanEnablesSystemdUnits(t *testing.T) {
 		t.Fatalf("ran\n got %q\nwant %q", r.Ran, ran)
 	}
 	if got := p.Programs(tg); !slices.Equal(got, []string{"systemctl"}) {
+		t.Fatalf("programs %v", got)
+	}
+}
+
+func TestPlanRegistersScheduledTasks(t *testing.T) {
+	ps := func(command string) string {
+		return sh.Line("powershell", "-NoProfile", "-NonInteractive", "-Command", command)
+	}
+	enable := ps("Enable-ScheduledTask -TaskName 'it''s sync' -ErrorAction Stop")
+	register := ps("Register-ScheduledTask -TaskName 'cleanup' -Xml (Get-Content -Raw -LiteralPath 'C:/cfg/tasks/cleanup.xml') -Force -ErrorAction Stop")
+	r := &sh.Fake{Out: map[string]string{
+		ps("(Get-ScheduledTask -TaskName 'backup' -ErrorAction Stop).State"):     "Ready\r\n",
+		ps("(Get-ScheduledTask -TaskName 'it''s sync' -ErrorAction Stop).State"): "Disabled\r\n",
+	}}
+	p := Provider{r: r}
+	tg := config.Target{Name: "tasks", Provider: "services", OS: []string{"windows"},
+		Agents: []string{"C:/cfg/tasks/backup.xml", "C:/cfg/tasks/it's sync.xml", "C:/cfg/tasks/cleanup.xml"}}
+	actions, err := p.Plan(context.Background(), tg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, a := range actions {
+		got = append(got, string(a.Op)+" "+a.Resource+": "+a.Detail)
+		if err := a.Do(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	want := []string{
+		string(plan.OpUpdate) + " task:it's sync: enable the task in Task Scheduler (now disabled)",
+		string(plan.OpCreate) + " task:cleanup: register cleanup.xml with Task Scheduler",
+	}
+	if !slices.Equal(got, want) {
+		t.Fatalf("plan\n got %q\nwant %q", got, want)
+	}
+	if !slices.Equal(r.Ran, []string{enable, register}) {
+		t.Fatalf("ran\n got %q\nwant %q", r.Ran, []string{enable, register})
+	}
+	if got := p.Programs(tg); !slices.Equal(got, []string{"powershell"}) {
 		t.Fatalf("programs %v", got)
 	}
 }

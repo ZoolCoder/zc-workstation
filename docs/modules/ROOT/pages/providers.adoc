@@ -208,8 +208,10 @@ reach a `data:` URL, so the saver shows the page's default, dark look.
 == settings
 
 Keeps preferences at the values the config declares: on macOS the keys
-`defaults` reads and writes, on GNOME the keys of `gsettings`. A target drives
-one system, `os: [darwin]` with `defaults` or `os: [linux]` with `gsettings`.
+`defaults` reads and writes, on GNOME the keys of `gsettings`, and on Windows
+the user's registry values. A target drives one system: `os: [darwin]` with
+`defaults`, `os: [linux]` with `gsettings` or `os: [windows]` with
+`registry`.
 
 [source,yaml]
 ----
@@ -262,13 +264,39 @@ dark Adwaita theme, a faster key repeat and the dock's apps:
 * A schema or key GNOME does not know is a `CREATE` whose apply fails with
   gsettings' message.
 
+On Windows, `registry` maps a key under `HKCU` to its values. Dark mode, file
+extensions shown and the taskbar on the left:
+
+[source,yaml]
+----
+- name: windows
+  provider: settings
+  os: [windows]
+  registry:
+    'HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize':
+      AppsUseLightTheme: false
+      SystemUsesLightTheme: false
+    'HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced':
+      HideFileExt: 0
+      TaskbarAl: 0
+----
+
+* Only keys under `HKCU` (or `HKEY_CURRENT_USER`): the user's own settings,
+  which need no administrator. Quote a key in single quotes, so YAML keeps
+  its backslashes.
+* The plan reads each value with `reg query`. A bool or an integer is a
+  `REG_DWORD`, so `false` matches `0x0`; a string is a `REG_SZ`. A string
+  starting with `~/` is a path in your home folder.
+* Apply runs `reg add` with the type. Windows applies most values at once;
+  Explorer reads some only when it starts, so sign out to see them.
+
 [#services]
 == services
 
 Keeps background services running: Homebrew services, launchd agents on
-macOS, and systemd user units and timers on Linux. A target drives one
-system, `os: [darwin]` or `os: [linux]`. It starts what is stopped and never
-stops anything.
+macOS, systemd user units and timers on Linux, and Task Scheduler tasks on
+Windows. A target drives one system, `os: [darwin]`, `os: [linux]` or
+`os: [windows]`. It starts what is stopped and never stops anything.
 
 [source,yaml]
 ----
@@ -307,6 +335,25 @@ On Linux, `agents` names `.service` and `.timer` files:
   that lives outside systemd's folders.
 * `services` works on Linux too: Homebrew on Linux runs `brew services` on
   systemd.
+
+On Windows, `agents` names Task Scheduler task files, the `.xml` that Task
+Scheduler's *Export* or `Export-ScheduledTask` writes:
+
+[source,yaml]
+----
+- name: tasks
+  provider: services
+  os: [windows]
+  agents: [tasks/weekly-update.xml]
+----
+
+* The task's name is the file name without `.xml`. It is in place when
+  `Get-ScheduledTask` finds it and it is not disabled; PowerShell reports the
+  state in English whatever the system language.
+* A missing task is registered with `Register-ScheduledTask` from the file,
+  in whatever encoding it has. A disabled one is enabled.
+* A changed file is not registered again. Re-register it by hand, or from a
+  chezmoi `run_onchange_` script that hashes the file.
 
 [#keyboard]
 == keyboard
