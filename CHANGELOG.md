@@ -82,6 +82,14 @@ here with what to edit.
 
 ### Providers
 
+- `settings` runs on Windows: `registry` values under `HKCU`, read with
+  `reg query` and written with `reg add`.
+- `services` runs on Windows: Task Scheduler `.xml` files under `agents`,
+  registered and enabled through PowerShell.
+- The theme has a WezTerm config and PowerShell colours, and
+  `example/home` a PowerShell profile with mise, starship and atuin.
+- CI applies a config on a Windows runner, then checks that a second plan
+  finds nothing and `doctor` passes.
 - apt runs `apt-get update` first on a machine with no package lists yet,
   such as a fresh install or container.
 - `keyboard` remaps keys on Linux with keyd. `assets/keyd/default.conf`

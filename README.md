@@ -551,8 +551,8 @@ bootstrap.sh          a new Mac in one command
 | Platform | State |
 |---|---|
 | macOS | Complete. It replaced an ~850-line shell setup. |
-| Linux | Supported: apt and dnf packages, dotfiles, runtimes. Next: systemd timers, gsettings. |
-| Windows | Supported: winget, dotfiles, runtimes. Next: registry settings, Task Scheduler. |
+| Linux | Supported: apt and dnf packages, dotfiles, runtimes, gsettings, systemd user units and timers, keyd. |
+| Windows | Supported: winget, dotfiles, runtimes, registry settings, Task Scheduler, a PowerShell profile and WezTerm. |
 
 Next up is the first release, `v0.1.0`. After it come Similar Images in
 ZC Care, a notarised ZCBar, and the Linux and Windows phases. See the

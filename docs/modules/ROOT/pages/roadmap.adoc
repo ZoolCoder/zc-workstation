@@ -155,8 +155,8 @@ zc-workstation/
 |Untrusted configs stay a `MANUAL` step.
 
 |`settings` and `services` providers
-|Done on macOS and Linux
-|macOS `defaults`, Homebrew services and launchd agents; GNOME gsettings and systemd user units and timers. Task Scheduler and the registry come with Windows.
+|Done on macOS, Linux and Windows
+|macOS `defaults`, Homebrew services and launchd agents; GNOME gsettings and systemd user units and timers; the Windows registry under `HKCU` and Task Scheduler.
 
 |Security checks in `doctor`
 |Done on macOS

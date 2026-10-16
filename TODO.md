@@ -26,9 +26,8 @@ same work. Remove the line in the pull request that finishes it.
 
 ## Windows (phase 3)
 
-- [ ] `settings` through the registry, `services` through Task Scheduler.
-- [ ] A PowerShell profile with starship and atuin, and WezTerm config.
-- [ ] `apply` then `doctor` on a Windows runner in CI.
+- [ ] A first green run of the `windows` CI job, which applies
+      `.github/ci/windows.yaml` and runs `doctor`.
 
 ## Docs
 
